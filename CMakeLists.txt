@@ -530,7 +530,7 @@ ENDIF (HDF5_ALLOW_EXTERNAL_SUPPORT MATCHES "SVN" OR HDF5_ALLOW_EXTERNAL_SUPPORT 
 #-----------------------------------------------------------------------------
 # Option for ZLib support
 #-----------------------------------------------------------------------------
-OPTION (HDF5_ENABLE_Z_LIB_SUPPORT "Enable Zlib Filters" OFF)
+OPTION (HDF5_ENABLE_Z_LIB_SUPPORT "Enable Zlib Filters" ON)
 IF (HDF5_ENABLE_Z_LIB_SUPPORT)
   IF (NOT H5_ZLIB_HEADER)
     IF (NOT ZLIB_USE_EXTERNAL)
