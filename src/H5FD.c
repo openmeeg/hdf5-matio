@@ -82,7 +82,6 @@ static herr_t H5FD_pl_close(hid_t driver_id, herr_t (*free_func)(void *),
     void *pl);
 static herr_t H5FD_free_cls(H5FD_class_t *cls);
 static herr_t H5FD_fapl_copy(hid_t driver_id, const void *fapl, void **copied_fapl);
-static herr_t H5FD_dxpl_copy(hid_t driver_id, const void *dxpl, void **copied_dxpl);
 static int H5FD_query(const H5FD_t *f, unsigned long *flags/*out*/);
 static int H5FD_driver_query(const H5FD_class_t *driver, unsigned long *flags/*out*/);
 
@@ -112,7 +111,16 @@ static int H5FD_driver_query(const H5FD_class_t *driver, unsigned long *flags/*o
  * object and the file is closed and re-opened, the 'fileno' value will
  * be different.
  */
-static unsigned long file_serial_no;
+static unsigned long H5FD_file_serial_no_g;
+
+/* File driver ID class */
+static const H5I_class_t H5I_VFL_CLS[1] = {{
+    H5I_VFL,			/* ID class value */
+    H5I_CLASS_REUSE_IDS,	/* Class flags */
+    0,				/* # of reserved IDs for class */
+    (H5I_free_t)H5FD_free_cls	/* Callback routine for closing objects of this class */
+}};
+
 
 
 /*-------------------------------------------------------------------------
@@ -164,11 +172,11 @@ H5FD_init_interface(void)
 
     FUNC_ENTER_NOAPI_NOINIT
 
-    if(H5I_register_type(H5I_VFL, (size_t)H5I_VFL_HASHSIZE, 0, (H5I_free_t)H5FD_free_cls)<H5I_FILE)
+    if(H5I_register_type(H5I_VFL_CLS) < 0)
 	HGOTO_ERROR(H5E_VFL, H5E_CANTINIT, FAIL, "unable to initialize interface")
 
     /* Reset the file serial numbers */
-    file_serial_no = 0;
+    H5FD_file_serial_no_g = 0;
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
@@ -203,8 +211,8 @@ H5FD_term_interface(void)
     FUNC_ENTER_NOAPI_NOINIT_NOERR
 
     if(H5_interface_initialize_g) {
-	if((n=H5I_nmembers(H5I_VFL))!=0) {
-	    H5I_clear_type(H5I_VFL, FALSE, FALSE);
+	if(H5I_nmembers(H5I_VFL) > 0) {
+	    (void)H5I_clear_type(H5I_VFL, FALSE, FALSE);
 
             /* Reset the VFL drivers, if they've been closed */
             if(H5I_nmembers(H5I_VFL)==0) {
@@ -222,17 +230,23 @@ H5FD_term_interface(void)
                 H5FD_multi_term();
 #ifdef H5_HAVE_PARALLEL
                 H5FD_mpio_term();
-                H5FD_mpiposix_term();
 #endif /* H5_HAVE_PARALLEL */
             } /* end if */
-	} else {
-	    H5I_dec_type_ref(H5I_VFL);
+
+            n++; /*H5I*/
+	} /* end if */
+        else {
+            /* Destroy the VFL driver id group */
+	    (void)H5I_dec_type_ref(H5I_VFL);
+            n++; /*H5I*/
+
+	    /* Mark closed */
 	    H5_interface_initialize_g = 0;
-	    n = 1; /*H5I*/
-	}
-    }
+	} /* end else */
+    } /* end if */
+
     FUNC_LEAVE_NOAPI(n)
-}
+} /* end H5FD_term_interface() */
 
 
 /*-------------------------------------------------------------------------
@@ -464,13 +478,9 @@ H5FD_get_class(hid_t id)
             if(H5P_get(plist, H5F_ACS_FILE_DRV_ID_NAME, &driver_id) < 0)
                 HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get driver ID")
             ret_value = H5FD_get_class(driver_id);
-        } else if(TRUE == H5P_isa_class(id, H5P_DATASET_XFER)) {
-            if(H5P_get(plist, H5D_XFER_VFL_ID_NAME, &driver_id) < 0)
-                HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get driver ID")
-            ret_value = H5FD_get_class(driver_id);
-        } else {
-            HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, NULL, "not a driver id, file access property list or data transfer property list")
-        }
+        } /* end if */
+        else
+            HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, NULL, "not a driver id or file access property list")
     } /* end if */
 
 done:
@@ -503,7 +513,7 @@ H5FD_sb_size(H5FD_t *file)
 
     FUNC_ENTER_NOAPI(0)
 
-    assert(file && file->cls);
+    HDassert(file && file->cls);
 
     if(file->cls->sb_size)
 	ret_value = (file->cls->sb_size)(file);
@@ -541,7 +551,7 @@ H5FD_sb_encode(H5FD_t *file, char *name/*out*/, uint8_t *buf)
 
     FUNC_ENTER_NOAPI(FAIL)
 
-    assert(file && file->cls);
+    HDassert(file && file->cls);
     if(file->cls->sb_encode &&
             (file->cls->sb_encode)(file, name/*out*/, buf/*out*/) < 0)
 	HGOTO_ERROR(H5E_VFL, H5E_CANTINIT, FAIL, "driver sb_encode request failed")
@@ -703,7 +713,7 @@ H5FD_fapl_get(H5FD_t *file)
 
     FUNC_ENTER_NOAPI(NULL)
 
-    assert(file);
+    HDassert(file);
 
     if(file->cls->fapl_get)
 	ret_value = (file->cls->fapl_get)(file);
@@ -831,125 +841,6 @@ H5FD_fapl_close(hid_t driver_id, void *fapl)
 done:
     FUNC_LEAVE_NOAPI(ret_value)
 } /* end H5FD_fapl_close() */
-
-
-/*-------------------------------------------------------------------------
- * Function:	H5FD_dxpl_open
- *
- * Purpose:	Mark a driver as used by a data transfer property list
- *
- * Return:	Success:	non-negative
- *
- *		Failure:	negative
- *
- * Programmer:	Quincey Koziol
- *              Thursday, October 23, 2003
- *
- * Modifications:
- *
- *-------------------------------------------------------------------------
- */
-herr_t
-H5FD_dxpl_open(H5P_genplist_t *plist, hid_t driver_id, const void *driver_info)
-{
-    void *copied_driver_info = NULL;           /* Temporary VFL driver info */
-    herr_t ret_value = SUCCEED;   /* Return value */
-
-    FUNC_ENTER_NOAPI(FAIL)
-
-    /* Increment the reference count on the driver and copy the driver info */
-    if(H5I_inc_ref(driver_id, FALSE) < 0)
-        HGOTO_ERROR(H5E_FILE, H5E_CANTINC, FAIL, "can't increment VFL driver ID")
-    if(H5FD_dxpl_copy(driver_id, driver_info, &copied_driver_info) < 0)
-        HGOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "can't copy VFL driver")
-
-    /* Set the driver information for the new property list */
-    if(H5P_set(plist, H5D_XFER_VFL_ID_NAME, &driver_id) < 0)
-        HGOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set VFL driver ID")
-    if(H5P_set(plist, H5D_XFER_VFL_INFO_NAME, &copied_driver_info) < 0)
-        HGOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set VFL driver info")
-
-done:
-    if(ret_value < 0)
-        if(copied_driver_info && H5FD_dxpl_close(driver_id, copied_driver_info) < 0)
-            HDONE_ERROR(H5E_FILE, H5E_CANTCLOSEOBJ, FAIL, "can't close copy of driver info")
-
-    FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5FD_dxpl_open() */
-
-
-/*-------------------------------------------------------------------------
- * Function:	H5FD_dxpl_copy
- *
- * Purpose:	Copies the driver-specific part of the data transfer property
- *		list.
- *
- * Return:	Success:	non-negative
- *
- *		Failure:	negative
- *
- * Programmer:	Robb Matzke
- *              Tuesday, August  3, 1999
- *
- *-------------------------------------------------------------------------
- */
-static herr_t
-H5FD_dxpl_copy(hid_t driver_id, const void *old_dxpl, void **copied_dxpl)
-{
-    H5FD_class_t *driver;
-    herr_t ret_value = SUCCEED;       /* Return value */
-
-    FUNC_ENTER_NOAPI_NOINIT
-
-    /* Check args */
-    if(NULL == (driver = (H5FD_class_t *)H5I_object(driver_id)))
-	HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "not a driver ID")
-
-    /* Copy the file access property list */
-    if(H5FD_pl_copy(driver->dxpl_copy, driver->dxpl_size, old_dxpl, copied_dxpl) < 0)
-        HGOTO_ERROR(H5E_VFL, H5E_UNSUPPORTED, FAIL, "can't copy driver data transfer property list")
-
-done:
-    FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5FD_dxpl_copy() */
-
-
-/*-------------------------------------------------------------------------
- * Function:	H5FD_dxpl_close
- *
- * Purpose:	Closes a driver for a dataset transfer property list
- *
- * Return:	Success:	non-negative
- *		Failure:	negative
- *
- * Programmer:	Robb Matzke
- *              Tuesday, August  3, 1999
- *
- * Modifications:
- *
- *-------------------------------------------------------------------------
- */
-herr_t
-H5FD_dxpl_close(hid_t driver_id, void *dxpl)
-{
-    H5FD_class_t *driver;
-    herr_t      ret_value = SUCCEED;       /* Return value */
-
-    FUNC_ENTER_NOAPI(FAIL)
-
-    /* Check args */
-    if(driver_id > 0) {
-        if(NULL == (driver = (H5FD_class_t *)H5I_object(driver_id)))
-            HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "not a driver ID")
-
-        /* Close the driver for the property list */
-        if(H5FD_pl_close(driver_id, driver->dxpl_free, dxpl) < 0)
-            HGOTO_ERROR(H5E_VFL, H5E_CANTINIT, FAIL, "driver fapl_free request failed")
-    } /* end if */
-
-done:
-    FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5FD_dxpl_close() */
 
 
 /*-------------------------------------------------------------------------
@@ -1119,11 +1010,11 @@ H5FD_open(const char *name, unsigned flags, hid_t fapl_id, haddr_t maxaddr)
         HGOTO_ERROR(H5E_VFL, H5E_CANTINIT, NULL, "unable to query file driver")
 
     /* Increment the global serial number & assign it to this H5FD_t object */
-    if(++file_serial_no == 0) {
+    if(++H5FD_file_serial_no_g == 0) {
         /* (Just error out if we wrap around for now...) */
         HGOTO_ERROR(H5E_VFL, H5E_CANTINIT, NULL, "unable to get file serial number")
     } /* end if */
-    file->fileno = file_serial_no;
+    file->fileno = H5FD_file_serial_no_g;
 
     /* Start with base address set to 0 */
     /* (This will be changed later, when the superblock is located) */
@@ -1329,8 +1220,8 @@ H5FDquery(const H5FD_t *f, unsigned long *flags/*out*/)
     FUNC_ENTER_API(FAIL)
     H5TRACE2("Is", "*xx", f, flags);
 
-    assert(f);
-    assert(flags);
+    HDassert(f);
+    HDassert(flags);
 
     ret_value = H5FD_query(f, flags);
 
@@ -1358,7 +1249,7 @@ H5FD_query(const H5FD_t *f, unsigned long *flags/*out*/)
 {
     int	ret_value = 0;          /* Return value */
 
-    FUNC_ENTER_NOAPI_NOINIT
+    FUNC_ENTER_NOAPI_NOINIT_NOERR
 
     HDassert(f);
     HDassert(flags);
@@ -1369,7 +1260,6 @@ H5FD_query(const H5FD_t *f, unsigned long *flags/*out*/)
     else
         *flags=0;
 
-done:
     FUNC_LEAVE_NOAPI(ret_value)
 } /* end H5FD_query() */
 
@@ -1395,7 +1285,7 @@ H5FD_driver_query(const H5FD_class_t *driver, unsigned long *flags/*out*/)
 {
     int ret_value = 0;          /* Return value */
 
-    FUNC_ENTER_NOAPI_NOINIT
+    FUNC_ENTER_NOAPI_NOINIT_NOERR
 
     HDassert(driver);
     HDassert(flags);
@@ -1406,7 +1296,6 @@ H5FD_driver_query(const H5FD_class_t *driver, unsigned long *flags/*out*/)
     else 
         *flags = 0;
 
-done:
     FUNC_LEAVE_NOAPI(ret_value)
 } /* end H5FD_driver_query() */
 
@@ -1466,9 +1355,9 @@ H5FDalloc(H5FD_t *file, H5FD_mem_t type, hid_t dxpl_id, hsize_t size)
     if(size == 0)
 	HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, HADDR_UNDEF, "zero-size request")
     if(H5P_DEFAULT == dxpl_id)
-        dxpl_id= H5P_DATASET_XFER_DEFAULT;
+        dxpl_id = H5P_DATASET_XFER_DEFAULT;
     else
-        if(TRUE != H5P_isa_class(dxpl_id,H5P_DATASET_XFER))
+        if(TRUE != H5P_isa_class(dxpl_id, H5P_DATASET_XFER))
             HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, HADDR_UNDEF, "not a data transfer property list")
 
     /* Do the real work */
@@ -1518,9 +1407,9 @@ H5FDfree(H5FD_t *file, H5FD_mem_t type, hid_t dxpl_id, haddr_t addr, hsize_t siz
     if(type < H5FD_MEM_DEFAULT || type >= H5FD_MEM_NTYPES)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid request type")
     if(H5P_DEFAULT == dxpl_id)
-        dxpl_id= H5P_DATASET_XFER_DEFAULT;
+        dxpl_id = H5P_DATASET_XFER_DEFAULT;
     else
-        if(TRUE!=H5P_isa_class(dxpl_id,H5P_DATASET_XFER))
+        if(TRUE != H5P_isa_class(dxpl_id, H5P_DATASET_XFER))
             HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "not a data transfer property list")
 
     /* Do the real work */
@@ -1787,15 +1676,14 @@ done:
  * Programmer:	Robb Matzke
  *              Thursday, July 29, 1999
  *
- * Modifications:
- *
  *-------------------------------------------------------------------------
  */
 herr_t
 H5FDread(H5FD_t *file, H5FD_mem_t type, hid_t dxpl_id, haddr_t addr, size_t size,
 	 void *buf/*out*/)
 {
-    herr_t      ret_value = SUCCEED;       /* Return value */
+    H5P_genplist_t *dxpl;               /* DXPL object */
+    herr_t      ret_value = SUCCEED;    /* Return value */
 
     FUNC_ENTER_API(FAIL)
     H5TRACE6("e", "*xMtiazx", file, type, dxpl_id, addr, size, buf);
@@ -1806,16 +1694,20 @@ H5FDread(H5FD_t *file, H5FD_mem_t type, hid_t dxpl_id, haddr_t addr, size_t size
 
     /* Get the default dataset transfer property list if the user didn't provide one */
     if(H5P_DEFAULT == dxpl_id)
-        dxpl_id= H5P_DATASET_XFER_DEFAULT;
+        dxpl_id = H5P_DATASET_XFER_DEFAULT;
     else
         if(TRUE != H5P_isa_class(dxpl_id, H5P_DATASET_XFER))
             HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "not a data transfer property list")
     if(!buf)
 	HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "null result buffer")
 
+    /* Get the DXPL plist object for DXPL ID */
+    if(NULL == (dxpl = (H5P_genplist_t *)H5I_object(dxpl_id)))
+        HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "can't get property list")
+
     /* Do the real work */
     /* (Note compensating for base address addition in internal routine) */
-    if(H5FD_read(file, dxpl_id, type, addr - file->base_addr, size, buf) < 0)
+    if(H5FD_read(file, dxpl, type, addr - file->base_addr, size, buf) < 0)
 	HGOTO_ERROR(H5E_VFL, H5E_READERROR, FAIL, "file read request failed")
 
 done:
@@ -1838,15 +1730,14 @@ done:
  * Programmer:	Robb Matzke
  *              Thursday, July 29, 1999
  *
- * Modifications:
- *
  *-------------------------------------------------------------------------
  */
 herr_t
 H5FDwrite(H5FD_t *file, H5FD_mem_t type, hid_t dxpl_id, haddr_t addr, size_t size,
 	  const void *buf)
 {
-    herr_t      ret_value = SUCCEED;       /* Return value */
+    H5P_genplist_t *dxpl;               /* DXPL object */
+    herr_t      ret_value = SUCCEED;    /* Return value */
 
     FUNC_ENTER_API(FAIL)
     H5TRACE6("e", "*xMtiaz*x", file, type, dxpl_id, addr, size, buf);
@@ -1863,9 +1754,13 @@ H5FDwrite(H5FD_t *file, H5FD_mem_t type, hid_t dxpl_id, haddr_t addr, size_t siz
     if(!buf)
 	HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "null buffer")
 
+    /* Get the DXPL plist object for DXPL ID */
+    if(NULL == (dxpl = (H5P_genplist_t *)H5I_object(dxpl_id)))
+        HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "can't get property list")
+
     /* The real work */
     /* (Note compensating for base address addition in internal routine) */
-    if(H5FD_write(file, dxpl_id, type, addr - file->base_addr, size, buf) < 0)
+    if(H5FD_write(file, dxpl, type, addr - file->base_addr, size, buf) < 0)
 	HGOTO_ERROR(H5E_VFL, H5E_WRITEERROR, FAIL, "file write request failed")
 
 done:
@@ -1975,7 +1870,7 @@ H5FDtruncate(H5FD_t *file, hid_t dxpl_id, unsigned closing)
     if(H5P_DEFAULT == dxpl_id)
         dxpl_id = H5P_DATASET_XFER_DEFAULT;
     else
-        if(TRUE != H5P_isa_class(dxpl_id,H5P_DATASET_XFER))
+        if(TRUE != H5P_isa_class(dxpl_id, H5P_DATASET_XFER))
             HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "not a data transfer property list")
 
     /* Do the real work */

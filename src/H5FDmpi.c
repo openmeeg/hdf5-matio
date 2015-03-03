@@ -29,11 +29,6 @@
 #include "H5FDmpi.h"            /* Common MPI file driver		*/
 #include "H5Pprivate.h"		/* Property lists			*/
 
-/*
- * The view is set to this value
- */
-char H5FD_mpi_native_g[] = "native";
-
 #ifdef H5_HAVE_PARALLEL
 
 
@@ -56,13 +51,16 @@ char H5FD_mpi_native_g[] = "native";
 int
 H5FD_mpi_get_rank(const H5FD_t *file)
 {
-    const H5FD_class_mpi_t *cls=(const H5FD_class_mpi_t *)(file->cls);
+    const H5FD_class_mpi_t *cls;
+
     int	ret_value;
 
     FUNC_ENTER_NOAPI(FAIL)
 
-    assert(file && cls);
-    assert(cls->get_rank);        /* All MPI drivers must implement this */
+    HDassert(file);
+    cls = (const H5FD_class_mpi_t *)(file->cls);
+    HDassert(cls);
+    HDassert(cls->get_rank);        /* All MPI drivers must implement this */
 
     /* Dispatch to driver */
     if ((ret_value=(cls->get_rank)(file))<0)
@@ -92,13 +90,15 @@ done:
 int
 H5FD_mpi_get_size(const H5FD_t *file)
 {
-    const H5FD_class_mpi_t *cls=(const H5FD_class_mpi_t *)(file->cls);
+    const H5FD_class_mpi_t *cls;
     int	ret_value;
 
     FUNC_ENTER_NOAPI(FAIL)
 
-    assert(file && cls);
-    assert(cls->get_size);        /* All MPI drivers must implement this */
+    HDassert(file);
+    cls = (const H5FD_class_mpi_t *)(file->cls);
+    HDassert(cls);
+    HDassert(cls->get_size);        /* All MPI drivers must implement this */
 
     /* Dispatch to driver */
     if ((ret_value=(cls->get_size)(file))<0)
@@ -128,13 +128,15 @@ done:
 MPI_Comm
 H5FD_mpi_get_comm(const H5FD_t *file)
 {
-    const H5FD_class_mpi_t *cls=(const H5FD_class_mpi_t *)(file->cls);
+    const H5FD_class_mpi_t *cls;
     MPI_Comm	ret_value;
 
     FUNC_ENTER_NOAPI(MPI_COMM_NULL)
 
-    assert(file && cls);
-    assert(cls->get_comm);        /* All MPI drivers must implement this */
+    HDassert(file);
+    cls = (const H5FD_class_mpi_t *)(file->cls);
+    HDassert(cls);
+    HDassert(cls->get_comm);        /* All MPI drivers must implement this */
 
     /* Dispatch to driver */
     if ((ret_value=(cls->get_comm)(file))==MPI_COMM_NULL)
@@ -215,7 +217,7 @@ H5FD_mpi_haddr_to_MPIOff(haddr_t addr, MPI_Offset *mpi_off/*out*/)
 
     FUNC_ENTER_NOAPI_NOINIT_NOERR
 
-    assert(mpi_off);
+    HDassert(mpi_off);
 
     /* Convert the HDF5 address into an MPI offset */
     *mpi_off = (MPI_Offset)addr;
@@ -371,8 +373,8 @@ H5FD_mpio_wait_for_left_neighbor(H5FD_t *_file)
 
     FUNC_ENTER_NOAPI(FAIL)
 
-    assert(file);
-    assert(H5FD_MPIO==file->pub.driver_id);
+    HDassert(file);
+    HDassert(H5FD_MPIO==file->pub.driver_id);
 
     /* Portably initialize MPI status variable */
     HDmemset(&rcvstat,0,sizeof(MPI_Status));
@@ -425,14 +427,12 @@ H5FD_mpio_signal_right_neighbor(H5FD_t *_file)
 
     FUNC_ENTER_NOAPI(FAIL)
 
-    assert(file);
-    assert(H5FD_MPIO==file->pub.driver_id);
+    HDassert(file);
+    HDassert(H5FD_MPIO==file->pub.driver_id);
 
-    if (file->mpi_rank != (file->mpi_size-1)) {
-        if (MPI_SUCCESS != (mpi_code=MPI_Send(&msgbuf, 0/*empty msg*/, MPI_CHAR,
-			file->mpi_rank+1, 0, file->comm)))
+    if(file->mpi_rank != (file->mpi_size - 1))
+        if(MPI_SUCCESS != (mpi_code=MPI_Send(&msgbuf, 0/*empty msg*/, MPI_CHAR, file->mpi_rank + 1, 0, file->comm)))
             HMPI_GOTO_ERROR(FAIL, "MPI_Send failed", mpi_code)
-    }
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
@@ -466,7 +466,7 @@ done:
  *-------------------------------------------------------------------------
  */
 herr_t
-H5FD_mpi_setup_collective(hid_t dxpl_id, MPI_Datatype btype, MPI_Datatype ftype)
+H5FD_mpi_setup_collective(hid_t dxpl_id, MPI_Datatype *btype, MPI_Datatype *ftype)
 {
     H5P_genplist_t *plist;      /* Property list pointer */
     herr_t      ret_value=SUCCEED;       /* Return value */
@@ -478,56 +478,15 @@ H5FD_mpi_setup_collective(hid_t dxpl_id, MPI_Datatype btype, MPI_Datatype ftype)
         HGOTO_ERROR(H5E_PLIST, H5E_BADTYPE, FAIL, "not a dataset transfer list")
 
     /* Set buffer MPI type */
-    if(H5P_insert(plist,H5FD_MPI_XFER_MEM_MPI_TYPE_NAME,H5FD_MPI_XFER_MEM_MPI_TYPE_SIZE,&btype,NULL,NULL,NULL,NULL,NULL,NULL)<0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't insert MPI-I/O property")
+    if(H5P_set(plist, H5FD_MPI_XFER_MEM_MPI_TYPE_NAME, btype) < 0)
+        HGOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set MPI-I/O property")
 
-    /* Set file MPI type */
-    if(H5P_insert(plist,H5FD_MPI_XFER_FILE_MPI_TYPE_NAME,H5FD_MPI_XFER_FILE_MPI_TYPE_SIZE,&ftype,NULL,NULL,NULL,NULL,NULL,NULL)<0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't insert MPI-I/O property")
+    /* Set File MPI type */
+    if(H5P_set(plist, H5FD_MPI_XFER_FILE_MPI_TYPE_NAME, ftype) < 0)
+        HGOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set MPI-I/O property")
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
 } /* end H5FD_mpi_setup_collective() */
 
-
-/*-------------------------------------------------------------------------
- * Function:	H5FD_mpi_teardown_collective
- *
- * Purpose:	Remove the temporary MPI-I/O properties from dxpl.
- *
- * Return:	Success:        Non-negative
- *		Failure:	Negative
- *
- * Programmer:	Quincey Koziol
- *              Monday, June 17, 2002
- *
- * Modifications:
- *
- *-------------------------------------------------------------------------
- */
-herr_t
-H5FD_mpi_teardown_collective(hid_t dxpl_id)
-{
-    H5P_genplist_t *plist;      /* Property list pointer */
-    herr_t      ret_value=SUCCEED;       /* Return value */
-
-    FUNC_ENTER_NOAPI(FAIL)
-
-    /* Check arguments */
-    if(NULL == (plist = H5P_object_verify(dxpl_id,H5P_DATASET_XFER)))
-        HGOTO_ERROR(H5E_PLIST, H5E_BADTYPE, FAIL, "not a dataset transfer list")
-
-    /* Remove buffer MPI type */
-    if(H5P_remove(dxpl_id,plist,H5FD_MPI_XFER_MEM_MPI_TYPE_NAME)<0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTDELETE, FAIL, "can't remove MPI-I/O property")
-
-    /* Remove file MPI type */
-    if(H5P_remove(dxpl_id,plist,H5FD_MPI_XFER_FILE_MPI_TYPE_NAME)<0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTDELETE, FAIL, "can't remove MPI-I/O property")
-
-done:
-    FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5FD_mpi_teardown_collective() */
-
 #endif /* H5_HAVE_PARALLEL */
-

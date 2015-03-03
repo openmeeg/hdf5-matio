@@ -21,13 +21,13 @@
 include $(top_srcdir)/config/commence.am
 
 # Include src and tools/lib directories
-INCLUDES=-I$(top_srcdir)/src -I$(top_srcdir)/tools/lib
+AM_CPPFLAGS+=-I$(top_srcdir)/src -I$(top_srcdir)/tools/lib
 
 # Always build and test h5diff but build and test ph5diff only if parallel
 # is enabled.
 if BUILD_PARALLEL_CONDITIONAL
   H5PDIFF=ph5diff
-  TEST_SCRIPT_PARA=$(srcdir)/testph5diff.sh
+  TEST_SCRIPT_PARA=testph5diff.sh
 endif
 
 # Our main target, h5diff
@@ -38,12 +38,12 @@ h5diff_LDFLAGS = $(LT_STATIC_EXEC) $(AM_LDFLAGS)
 
 # Test programs and scripts
 TEST_PROG=h5diffgentest
-TEST_SCRIPT=$(srcdir)/testh5diff.sh
+TEST_SCRIPT=testh5diff.sh
 
 check_PROGRAMS=$(TEST_PROG)
 check_SCRIPTS=$(TEST_SCRIPT) $(TEST_SCRIPT_PARA)
 # The parallel test script testph5diff.sh actually depends on testh5diff.sh.
-SCRIPT_DEPEND=h5diff$(EXEEXT) $(H5PDIFF) $(srcdir)/testh5diff.sh
+SCRIPT_DEPEND=h5diff$(EXEEXT) $(H5PDIFF) testh5diff.sh
 
 # Source files for the program
 h5diff_SOURCES=h5diff_main.c h5diff_common.c

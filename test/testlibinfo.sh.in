@@ -27,6 +27,8 @@
 # Programmer: Albert Cheng
 #	      Sep 18, 2009
 
+srcdir=@srcdir@
+
 # Determine the configure options of the hdf5 library and executables.
 
 Shared_Lib=@enable_shared@
@@ -51,7 +53,10 @@ SKIP() {
 # Function definitions
 CHECK_LIBINFO(){
     LINEMSG $1
-    if strings $1 | grep "SUMMARY OF THE HDF5 CONFIGURATION" > /dev/null; then
+    # Some systems, like Mac, the strings command inspects library files. Older
+    # versions of strings may not know newer library format, resulting in
+    # command errors. Make it read the file as stdin to avoid the problem.
+    if strings < $1 | grep "SUMMARY OF THE HDF5 CONFIGURATION" > /dev/null; then
 	echo " PASSED"
     else
 	echo " FAILED"

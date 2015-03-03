@@ -361,25 +361,10 @@ hsize_t diff_datasetid( hid_t did1,
         *------------------------------------------------------------------
         */
 
-        if(m_size1 != m_size2) {
-            if(m_size1 < m_size2) {
-                H5Tclose(m_tid1);
-
-                if((m_tid1 = h5tools_get_native_type(f_tid2)) < 0)
-                    goto error;
-
-                m_size1 = H5Tget_size(m_tid1);
-            } /* end if */
-            else {
-                H5Tclose(m_tid2);
-
-                if((m_tid2 = h5tools_get_native_type(f_tid1)) < 0)
-                    goto error;
-
-                m_size2 = H5Tget_size(m_tid2);
-            } /* end else */
-        } /* end if */
-        HDassert(m_size1 == m_size2);
+        if (FAIL == match_up_memsize (f_tid1, f_tid2,
+                                      &m_tid1, &m_tid2, 
+                                      &m_size1, &m_size2))
+            goto error;
 
         /* print names */
         if(obj1_name)
@@ -448,13 +433,13 @@ hsize_t diff_datasetid( hid_t did1,
                 HDassert(sm_nbytes > 0);
             } /* end for */
 
-      /* malloc return code should be verified.
+            /* malloc return code should be verified.
              * If fail, need to handle the error.
              * This else branch should be recoded as a separate function.
              * Note that there are many "goto error" within this branch
              * that fails to address freeing other objects created here.
-       * E.g., sm_space.
-       */
+             * E.g., sm_space.
+             */
             sm_buf1 = HDmalloc((size_t)sm_nbytes);
             HDassert(sm_buf1);
             sm_buf2 = HDmalloc((size_t)sm_nbytes);
@@ -514,13 +499,6 @@ hsize_t diff_datasetid( hid_t did1,
         } /* hyperslab read */
     } /*can_compare*/
 
-    /*-------------------------------------------------------------------------
-     * compare attributes
-     * the if condition refers to cases when the dataset is a referenced object
-     *-------------------------------------------------------------------------
-     */
-    if(obj1_name)
-        nfound += diff_attr(did1,did2,obj1_name,obj2_name,options);
 
     /*-------------------------------------------------------------------------
      * close

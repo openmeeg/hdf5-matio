@@ -269,8 +269,8 @@ attach_ref_attr(hid_t file_id, hid_t loc_id)
     if(H5Dwrite(did2, H5T_NATIVE_INT, H5S_ALL , H5S_ALL, H5P_DEFAULT,data2) < 0) TEST_ERROR
 
     /* create an attribute with two object references */
-    if(H5Rcreate(&ref[0], file_id, dsetname1, H5R_OBJECT, -1) < 0) TEST_ERROR
-    if(H5Rcreate(&ref[1], file_id, dsetname2, H5R_OBJECT, -1) < 0) TEST_ERROR
+    if(H5Rcreate(&ref[0], file_id, dsetname1, H5R_OBJECT, (hid_t)-1) < 0) TEST_ERROR
+    if(H5Rcreate(&ref[1], file_id, dsetname2, H5R_OBJECT, (hid_t)-1) < 0) TEST_ERROR
     if((aid = H5Acreate2(loc_id, "obj_ref_attr", H5T_STD_REF_OBJ, sid_ref, H5P_DEFAULT, H5P_DEFAULT)) < 0) TEST_ERROR
     if(H5Awrite(aid, H5T_STD_REF_OBJ, ref) < 0) TEST_ERROR
 
@@ -750,8 +750,8 @@ compare_attribute(hid_t aid, hid_t aid2, hid_t pid, const void *wbuf, hid_t obj_
 
     /* Check raw data read in against data written out */
     if(wbuf) {
-        if(!compare_data(aid, 0, pid, tid, (size_t)nelmts, wbuf, rbuf, obj_owner)) TEST_ERROR
-        if(!compare_data(aid2, 0, pid, tid2, (size_t)nelmts, wbuf, rbuf2, obj_owner)) TEST_ERROR
+        if(!compare_data(aid, (hid_t)0, pid, tid, (size_t)nelmts, wbuf, rbuf, obj_owner)) TEST_ERROR
+        if(!compare_data(aid2, (hid_t)0, pid, tid2, (size_t)nelmts, wbuf, rbuf2, obj_owner)) TEST_ERROR
     } /* end if */
     /* Don't have written data, just compare data between the two attributes */
     else
@@ -1303,8 +1303,8 @@ compare_datasets(hid_t did, hid_t did2, hid_t pid, const void *wbuf)
 
     /* Check raw data read in against data written out */
     if(wbuf) {
-        if(!compare_data(did, 0, pid, tid, (size_t)nelmts, wbuf, rbuf, did)) TEST_ERROR
-        if(!compare_data(did2, 0, pid, tid2, (size_t)nelmts, wbuf, rbuf2, did2)) TEST_ERROR
+        if(!compare_data(did, (hid_t)0, pid, tid, (size_t)nelmts, wbuf, rbuf, did)) TEST_ERROR
+        if(!compare_data(did2, (hid_t)0, pid, tid2, (size_t)nelmts, wbuf, rbuf2, did2)) TEST_ERROR
     } /* end if */
     /* Don't have written data, just compare data between the two datasets */
     else
@@ -8053,8 +8053,8 @@ test_copy_null_ref(hid_t fcpl_src, hid_t fcpl_dst, hid_t src_fapl, hid_t dst_fap
             sid, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) TEST_ERROR
 
     /* Create references */
-    if(H5Rcreate(&obj_buf[0], did1, ".", H5R_OBJECT, -1) < 0) TEST_ERROR
-    if(H5Rcreate(&obj_buf[1], did2, ".", H5R_OBJECT, -1) < 0) TEST_ERROR
+    if(H5Rcreate(&obj_buf[0], did1, ".", H5R_OBJECT, (hid_t)-1) < 0) TEST_ERROR
+    if(H5Rcreate(&obj_buf[1], did2, ".", H5R_OBJECT, (hid_t)-1) < 0) TEST_ERROR
     if(H5Rcreate(&reg_buf[0], did1, ".", H5R_DATASET_REGION, sid) < 0)
         TEST_ERROR
     if(H5Rcreate(&reg_buf[1], did2, ".", H5R_DATASET_REGION, sid) < 0)
@@ -9596,9 +9596,7 @@ test_copy_cdt_merge_cdt(hid_t fcpl_src, hid_t fcpl_dst, hid_t src_fapl, hid_t ds
     hid_t sid = -1;                             /* Dataspace ID */
     hid_t aid = -1;				/* Attribute ID */
     hid_t ocpypl_id = -1;                       /* Object copy plist ID */
-    int i;					/* Local index variable */
     hsize_t dim1d[1];				/* dimension sizes */
-    int buf[DIM_SIZE_1];			/* Buffer for data */
     H5O_info_t oinfo;                           /* Object info */
     haddr_t exp_addr;      			/* Expected object addresses */
     char src_filename[NAME_BUF_SIZE];		/* Source file name */
@@ -9608,10 +9606,6 @@ test_copy_cdt_merge_cdt(hid_t fcpl_src, hid_t fcpl_dst, hid_t src_fapl, hid_t ds
         TESTING("H5Ocopy(): merging various committed datatypes with reopen")
     else
         TESTING("H5Ocopy(): merging various committed datatypes")
-
-    /* set initial data values */
-    for (i=0; i<DIM_SIZE_1; i++)
-        buf[i] = i;
 
     /* Initialize the filenames */
     h5_fixname(FILENAME[0], src_fapl, src_filename, sizeof src_filename);
@@ -9829,8 +9823,6 @@ test_copy_cdt_merge_suggs(hid_t fcpl_src, hid_t fcpl_dst, hid_t src_fapl,
     hid_t fid_src = -1, fid_dst = -1;           /* File IDs */
     hid_t tid = -1;                             /* Datatype ID */
     hid_t ocpypl_id = -1;                       /* Object copy plist ID */
-    unsigned int i;                             /* Local index variables */
-    int buf[DIM_SIZE_1];                        /* Buffer for writing data */
     H5O_info_t oinfo;                           /* Object info */
     haddr_t exp_addr;                           /* Expected object address */
     char src_filename[NAME_BUF_SIZE];
@@ -9840,10 +9832,6 @@ test_copy_cdt_merge_suggs(hid_t fcpl_src, hid_t fcpl_dst, hid_t src_fapl,
         TESTING("H5Ocopy(): merging committed datatypes with suggestions and reopen")
     else
         TESTING("H5Ocopy(): merging committed datatypes with suggestions")
-
-    /* set initial data values */
-    for(i = 0; i < DIM_SIZE_1; i++)
-        buf[i] = (int)i;
 
     /* Initialize the filenames */
     h5_fixname(FILENAME[0], src_fapl, src_filename, sizeof src_filename);
@@ -10351,11 +10339,9 @@ test_copy_cdt_merge_all_suggs(hid_t fcpl_src, hid_t fcpl_dst, hid_t src_fapl,
     hid_t did = -1;                             /* Dataset ID */
     hid_t exp_did = -1;                          /* Dataset ID */
     hid_t tid_short = -1; 			/* Datatype ID */
-    hid_t exp_tid;				/* Expected datatype ID */
+    hid_t exp_tid = -1;				/* Expected datatype ID */
     hid_t ocpypl_id = -1;                       /* Object copy plist ID */
-    unsigned int i;                             /* Local index variables */
     hsize_t dim1d[1];                           /* Dataset dimensions */
-    int buf[DIM_SIZE_1];                        /* Buffer for writing data */
     char src_filename[NAME_BUF_SIZE];
     char dst_filename[NAME_BUF_SIZE];
 
@@ -10363,10 +10349,6 @@ test_copy_cdt_merge_all_suggs(hid_t fcpl_src, hid_t fcpl_dst, hid_t src_fapl,
         TESTING("H5Ocopy(): merging different committed datatypes with suggestions and reopen")
     else
         TESTING("H5Ocopy(): merging different committed datatypes with suggestions")
-
-    /* set initial data values */
-    for(i = 0; i < DIM_SIZE_1; i++)
-        buf[i] = (int)i;
 
     /* Initialize the filenames */
     h5_fixname(FILENAME[0], src_fapl, src_filename, sizeof src_filename);
@@ -11460,6 +11442,104 @@ error:
 
 
 /*-------------------------------------------------------------------------
+ * Function:    test_copy_iterate
+ *
+ * Purpose:     Tests iterating over objects in the root group, copying
+ *              all of them.
+ *
+ * Return:      Success:        0
+ *              Failure:        number of errors
+ *
+ * Programmer:  Neil Fortner
+ *              Thursday, July 12, 2012
+ *
+ *-------------------------------------------------------------------------
+ */
+static herr_t
+test_copy_iterate_cb(hid_t loc_id, const char *name,
+    const H5L_info_t UNUSED *link_info, void *op_data)
+{
+    hid_t dst_loc_id = *((hid_t *)op_data);
+
+    if(H5Ocopy(loc_id, name, dst_loc_id, name, H5P_DEFAULT, H5P_DEFAULT) < 0)
+        TEST_ERROR
+
+    return(H5_ITER_CONT);
+
+error:
+    return(H5_ITER_ERROR);
+} /* end test_copy_iterate_cb */
+
+static int
+test_copy_iterate(hid_t fcpl_src, hid_t fcpl_dst, hid_t src_fapl, hid_t dst_fapl)
+{
+    hid_t fid1 = -1, fid2 = -1;                 /* File IDs */
+    hid_t gid = -1;                             /* Group ID */
+    int i;
+    char grp_name[8];
+    char src_filename[NAME_BUF_SIZE];
+    char dst_filename[NAME_BUF_SIZE];
+
+    TESTING("H5Ocopy(): inside H5Literate() callback");
+
+    /* Initialize the filenames */
+    h5_fixname(FILENAME[0], src_fapl, src_filename, sizeof src_filename);
+    h5_fixname(FILENAME[1], src_fapl, dst_filename, sizeof dst_filename);
+
+    /* Reset file address checking info */
+    addr_reset();
+
+    /* Create source file */
+    if((fid1 = H5Fcreate(src_filename, H5F_ACC_TRUNC, fcpl_src, src_fapl)) < 0)
+        TEST_ERROR
+
+    /* Create groups */
+    for(i=0; i<9; i++) {
+        HDsnprintf(grp_name, sizeof(grp_name), "grp%d", i);
+        if((gid = H5Gcreate2(fid1, grp_name, H5P_DEFAULT, H5P_DEFAULT,
+                H5P_DEFAULT)) < 0)
+            TEST_ERROR
+        if(H5Gclose(gid) < 0)
+            TEST_ERROR
+    } /* end for */
+
+    /* Create destination file */
+    if((fid2 = H5Fcreate(dst_filename, H5F_ACC_TRUNC, fcpl_dst, dst_fapl)) < 0)
+        TEST_ERROR
+
+    /* Close files */
+    if(H5Fclose(fid1) < 0) TEST_ERROR
+    if(H5Fclose(fid2) < 0) TEST_ERROR
+
+    /* Reopen files */
+    if((fid1 = H5Fopen(src_filename, H5F_ACC_RDWR, src_fapl)) < 0) TEST_ERROR
+    if((fid2 = H5Fopen(dst_filename, H5F_ACC_RDWR, dst_fapl)) < 0) TEST_ERROR
+
+    /* Iterate over links in the root group, copying each object */
+    if((gid = H5Gopen2(fid1, "/", H5P_DEFAULT)) < 0) TEST_ERROR
+    if(H5Literate(gid, H5_INDEX_NAME, H5_ITER_INC, NULL, test_copy_iterate_cb,
+            &fid2) < 0)
+        TEST_ERROR
+
+    /* Close */
+    if(H5Gclose(gid) < 0) TEST_ERROR
+    if(H5Fclose(fid1) < 0) TEST_ERROR
+    if(H5Fclose(fid2) < 0) TEST_ERROR
+
+    PASSED();
+    return 0;
+
+error:
+    H5E_BEGIN_TRY {
+        H5Gclose(gid);
+        H5Fclose(fid1);
+        H5Fclose(fid2);
+    } H5E_END_TRY;
+    return 1;
+} /* end test_copy_iterate */
+
+
+/*-------------------------------------------------------------------------
  * Function:    test_copy_option
  *
  * Purpose:     Create a group in SRC file and copy it to DST file
@@ -12297,6 +12377,7 @@ main(void)
             nerrors += test_copy_same_file_named_datatype(fcpl_src, src_fapl);
             nerrors += test_copy_old_layout(fcpl_dst, dst_fapl);
             nerrors += test_copy_null_ref(fcpl_src, fcpl_dst, src_fapl, dst_fapl);
+            nerrors += test_copy_iterate(fcpl_src, fcpl_dst, src_fapl, dst_fapl);
         }
 
 /* TODO: not implemented

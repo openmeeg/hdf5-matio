@@ -15,6 +15,8 @@
 #
 # Tests for the h5jam/h5unjam tools
 
+srcdir=@srcdir@
+
 # Determine which filters are available
 USE_FILTER_SZIP="@USE_FILTER_SZIP@"
 USE_FILTER_DEFLATE="@USE_FILTER_DEFLATE@"
@@ -32,18 +34,17 @@ UNJAM=h5unjam                     # Tool to test
 JAM_BIN="$RUNSERIAL "`pwd`    # The path of the jam binary
 UNJAM_BIN=`pwd`    # The path of the jam binary
 
+RM='rm -rf'
 CMP='cmp -s'
 DIFF='diff -c'
 AWK='awk'
 CP='cp'
+DIRNAME='dirname'
+LS='ls'
+AWK='awk'
 
 nerrors=0
 verbose=yes
-
-# The build (current) directory might be different than the source directory.
-if test -z "$srcdir"; then
-   srcdir=.
-fi
 
 # source dirs
 SRC_TOOLS="$srcdir/.."
@@ -103,15 +104,36 @@ COPY_TESTFILES_TO_TESTDIR()
         echo $tstfile | tr -d ' ' | grep '^#' > /dev/null
         RET=$?
         if [ $RET -eq 1 ]; then
-            if [ -a $tstfile ]; then
-                $CP -f $tstfile $TESTDIR
-            else
-                echo "Error: FAILED to copy $tstfile"
-                echo "       $tstfile doesn't exist!"
-                exit $EXIT_FAILURE
+            # skip cp if srcdir is same as destdir
+            # this occurs when build/test performed in source dir and
+            # make cp fail
+            SDIR=`$DIRNAME $tstfile`
+            INODE_SDIR=`$LS -i -d $SDIR | $AWK -F' ' '{print $1}'`
+            INODE_DDIR=`$LS -i -d $TESTDIR | $AWK -F' ' '{print $1}'`
+            if [ "$INODE_SDIR" != "$INODE_DDIR" ]; then
+    	        $CP -f $tstfile $TESTDIR
+                if [ $? -ne 0 ]; then
+                    echo "Error: FAILED to copy $tstfile ."
+                
+                    # Comment out this to CREATE expected file
+                    exit $EXIT_FAILURE
+                fi
             fi
         fi
     done
+}
+
+CLEAN_TESTFILES_AND_TESTDIR()
+{
+    # skip rm if srcdir is same as destdir
+    # this occurs when build/test performed in source dir and
+    # make cp fail
+    SDIR=`$DIRNAME $tstfile`
+    INODE_SDIR=`$LS -i -d $SDIR | $AWK -F' ' '{print $1}'`
+    INODE_DDIR=`$LS -i -d $TESTDIR | $AWK -F' ' '{print $1}'`
+    if [ "$INODE_SDIR" != "$INODE_DDIR" ]; then
+        $RM $TESTDIR
+    fi
 }
 
 # Print a line-line message left justified in a field of 70 characters
@@ -369,7 +391,7 @@ JAMTEST() {
 			compare_orig="xxofile.h5"
 			cleanup="$cleanup $compare_orig"
 		else
-			# output goes to $4,  compare ofile to ubfile
+			# output goes to $3,  compare ofile to ubfile
 			ofile="$3"
 			compare_test="$ofile"
 			compare_orig="$ifile"
@@ -531,19 +553,22 @@ JAMTEST $TESTDIR/u513.txt $TESTDIR/tall.h5 ta5.h5
 CHECKFILE $TESTDIR/tall.h5 ta5.h5
 CLEANUP ta5.h5
 
-SETUP $TESTDIR/tall.h5 ta.h5
-JAMTEST $TESTDIR/u10.txt ta.h5 
-CHECKFILE $TESTDIR/tall.h5 ta.h5
-SETUP $TESTDIR/tall.h5 ta.h5
-JAMTEST $TESTDIR/u511.txt ta.h5 
-CHECKFILE $TESTDIR/tall.h5 ta.h5
-SETUP $TESTDIR/tall.h5 ta.h5
-JAMTEST $TESTDIR/u512.txt ta.h5 
-CHECKFILE $TESTDIR/tall.h5 ta.h5
-SETUP $TESTDIR/tall.h5 ta.h5
-JAMTEST $TESTDIR/u513.txt ta.h5 
-CHECKFILE $TESTDIR/tall.h5 ta.h5
-CLEANUP ta.h5
+SETUP $TESTDIR/tall.h5 ta6.h5
+JAMTEST $TESTDIR/u10.txt ta6.h5 
+CHECKFILE $TESTDIR/tall.h5 ta6.h5
+CLEANUP ta6.h5
+SETUP $TESTDIR/tall.h5 ta7.h5
+JAMTEST $TESTDIR/u511.txt ta7.h5 
+CHECKFILE $TESTDIR/tall.h5 ta7.h5
+CLEANUP ta7.h5
+SETUP $TESTDIR/tall.h5 ta8.h5
+JAMTEST $TESTDIR/u512.txt ta8.h5 
+CHECKFILE $TESTDIR/tall.h5 ta8.h5
+CLEANUP ta8.h5
+SETUP $TESTDIR/tall.h5 ta9.h5
+JAMTEST $TESTDIR/u513.txt ta9.h5 
+CHECKFILE $TESTDIR/tall.h5 ta9.h5
+CLEANUP ta9.h5
 
 JAMTEST $TESTDIR/u10.txt $TESTDIR/twithub.h5 tax2.h5
 CHECKFILE $TESTDIR/tall.h5 tax2.h5
@@ -664,7 +689,8 @@ UNJAMTEST taj3.h5 --delete tac3.h5
 CHECKFILE $TESTDIR/tall.h5 tac3.h5
 CLEANUP tac3.h5 taj3.h5
 
-
+# Clean up temporary files/directories
+CLEAN_TESTFILES_AND_TESTDIR
 
 if test $nerrors -eq 0 ; then
     echo "All $TESTNAME tests passed."

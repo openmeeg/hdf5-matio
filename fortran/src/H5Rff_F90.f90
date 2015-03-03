@@ -31,7 +31,7 @@
 ! NOTES
 !                         *** IMPORTANT ***
 !  If you add a new H5R function you must add the function name to the
-!  Windows dll file 'hdf5_fortrandll.def' in the fortran/src directory.
+!  Windows dll file 'hdf5_fortrandll.def.in' in the fortran/src directory.
 !  This is needed for Windows based operating systems.
 !*****
 
@@ -72,7 +72,72 @@ MODULE H5R_PROVISIONAL
 
   END INTERFACE
 
+  INTERFACE h5rget_region_f
+
+     MODULE PROCEDURE h5rget_region_region_f
+
+  END INTERFACE
+
+
 CONTAINS
+
+
+!****s* H5R/h5rget_region_region_f
+!
+! NAME
+!  h5rget_region_region_f
+!
+! PURPOSE
+!  Retrieves a dataspace with the specified region selected
+!
+! INPUTS
+!  dset_id 	 - identifier of the dataset containing
+!                  reference to the regions
+!  ref 	         - reference to open
+! OUTPUTS
+!  space_id 	 - dataspace identifier
+!  hdferr 	 - Returns 0 if successful and -1 if fails
+! AUTHOR
+!  Elena Pourmal
+!  August 12, 1999
+!
+! HISTORY 	
+!  Explicit Fortran interfaces were added for
+!  called C functions (it is needed for Windows
+!  port).  February 28, 2001
+!
+! NOTES
+!  This is a module procedure for the h5rget_region_f subroutine.
+!
+! SOURCE
+  SUBROUTINE h5rget_region_region_f(dset_id, ref, space_id, hdferr)
+    IMPLICIT NONE
+    INTEGER(HID_T), INTENT(IN) :: dset_id      ! Dataset identifier
+    TYPE(hdset_reg_ref_t_f), INTENT(IN) :: ref ! Dataset region reference
+    INTEGER(HID_T), INTENT(OUT) :: space_id    ! Space identifier
+    INTEGER, INTENT(OUT) :: hdferr             ! Error code
+!*****
+    INTEGER :: ref_f(REF_REG_BUF_LEN)          ! Local buffer to pass reference
+
+    INTERFACE
+       INTEGER FUNCTION h5rget_region_region_c(dset_id, ref_f, space_id)
+         USE H5GLOBAL
+         !DEC$IF DEFINED(HDF5F90_WINDOWS)
+         !DEC$ATTRIBUTES C,reference,decorate,alias:'H5RGET_REGION_REGION_C':: h5rget_region_region_c
+         !DEC$ENDIF
+         INTEGER(HID_T), INTENT(IN) :: dset_id
+         !              INTEGER, PARAMETER :: REF_REG_BUF_LEN = 3
+         INTEGER :: ref_f(REF_REG_BUF_LEN)
+         INTEGER(HID_T), INTENT(OUT) :: space_id
+       END FUNCTION h5rget_region_region_c
+    END INTERFACE
+
+    ref_f = ref%ref
+    hdferr = h5rget_region_region_c(dset_id, ref_f, space_id )
+
+  END SUBROUTINE h5rget_region_region_f
+
+
 
 !****s* H5R (F90)/h5rcreate_object_f
 !
@@ -321,7 +386,7 @@ CONTAINS
 !  Retrieves a name of a referenced object.
 !
 ! INPUTS
-!  loc_id  - Identifier for the dataset containing the reference or for the group that dataset is in.
+!  loc_id  - Identifier for the file containing the reference or for any object in that file.
 !  ref 	   - An object or dataset region reference.
 !
 ! OUTPUTS
@@ -332,7 +397,8 @@ CONTAINS
 !             Failure: -1
 !
 ! OPTIONAL PARAMETERS
-!  size    - The size of the name buffer.
+!  size    - The size of the name buffer, returning 0 (zero) if 
+!            no name is associated with the identifier
 !
 ! AUTHOR
 !  M. Scot Breitenfeld
@@ -341,7 +407,8 @@ CONTAINS
 ! SOURCES
   SUBROUTINE h5rget_name_object_f(loc_id,  ref, name, hdferr, size)
     IMPLICIT NONE
-    INTEGER(HID_T), INTENT(IN) :: loc_id   ! Identifier for the dataset containing the reference
+    INTEGER(HID_T), INTENT(IN) :: loc_id   ! Identifier for the file containing the reference or 
+                                           ! for any object in that file.
                                            ! or for the group that dataset is in.
     TYPE(hobj_ref_t_f), INTENT(IN) :: ref  ! Object reference
     INTEGER(SIZE_T), OPTIONAL, INTENT(OUT) :: size   ! The size of the name buffer,
@@ -388,8 +455,8 @@ CONTAINS
 !  Retrieves a name of a dataset region.
 !
 ! INPUTS
-!  loc_id 	 - Identifier for the dataset containing the reference or
-!                  for the group that dataset is in.
+!  loc_id 	 - Identifier for the file containing the reference or 
+!                  for any object in that file.
 !  ref 	         - An object or dataset region reference.
 !
 ! OUTPUTS
@@ -399,7 +466,8 @@ CONTAINS
 !                   Failure: -1
 !
 ! OPTIONAL PARAMETERS
-!  size 	 - The size of the name buffer.
+!  size 	 - The size of the name buffer,  returning 0 (zero) if no 
+!                  name is associated  with the identifier
 !
 ! AUTHOR
 !  M. Scot Breitenfeld
@@ -408,14 +476,11 @@ CONTAINS
 ! SOURCE
   SUBROUTINE h5rget_name_region_f(loc_id, ref, name, hdferr, size)
     IMPLICIT NONE
-    INTEGER(HID_T), INTENT(IN) :: loc_id   ! Identifier for the dataset containing the reference
-                                           ! or for the group that dataset is in.
-    TYPE(hdset_reg_ref_t_f), INTENT(IN) :: ref       ! Object reference
-    INTEGER(SIZE_T), OPTIONAL, INTENT(OUT) :: size   ! The size of the name buffer,
-                                                     ! returning 0 (zero) if no name is associated 
-                                                     ! with the identifier
-    CHARACTER(LEN=*), INTENT(OUT) :: name  ! A name associated with the referenced object or dataset region.
-    INTEGER, INTENT(OUT) :: hdferr         ! Error code
+    INTEGER(HID_T), INTENT(IN) :: loc_id
+    TYPE(hdset_reg_ref_t_f), INTENT(IN) :: ref
+    INTEGER(SIZE_T), OPTIONAL, INTENT(OUT) :: size
+    CHARACTER(LEN=*), INTENT(OUT) :: name
+    INTEGER, INTENT(OUT) :: hdferr
 !*****
     INTEGER :: ref_f(REF_REG_BUF_LEN)      ! Local buffer to pass reference
     INTEGER(SIZE_T) :: size_default

@@ -26,7 +26,7 @@
 ! NOTES
 !                         *** IMPORTANT ***
 !  If you add a new H5P function you must add the function name to the
-!  Windows dll file 'hdf5_fortrandll.def' in the fortran/src directory.
+!  Windows dll file 'hdf5_fortrandll.def.in' in the fortran/src directory.
 !  This is needed for Windows based operating systems.
 !
 !*****
@@ -131,6 +131,7 @@ CONTAINS
     INTEGER, EXTERNAL :: h5pset_dxpl_mpio_c
     hdferr = h5pset_dxpl_mpio_c(prp_id, data_xfer_mode)
   END SUBROUTINE h5pset_dxpl_mpio_f
+
 !****s* H5FDMPIO/h5pget_dxpl_mpio_f
 !
 ! NAME
@@ -164,74 +165,48 @@ CONTAINS
     hdferr = h5pget_dxpl_mpio_c(prp_id, data_xfer_mode)
   END SUBROUTINE h5pget_dxpl_mpio_f
 
-!****s* H5FDMPIO/h5pset_fapl_mpiposix_f
-!
+!****s* H5P/h5pget_mpio_actual_io_mode_f
 ! NAME
-!  h5pset_fapl_mpiposix_f
+!  h5pget_mpio_actual_io_mode_f
 !
 ! PURPOSE
-!  Stores MPI IO communicator information to the file
-!  access property list.
+!  Retrieves the type of I/O that HDF5 actually performed on the last 
+!  parallel I/O call. This is not necessarily the type of I/O requested. 
 !
 ! INPUTS
-!  prp_id 	 - file access property list identifier
-!  comm 	 - MPI-2 communicator
-!  use_gpfs 	 - logical flag to use the GPFS hints
+!  dxpl_id        - Dataset transfer property list identifier.
 ! OUTPUTS
-!  hdferr 	 - Returns 0 if successful and -1 if fails
+!  actual_io_mode - The type of I/O performed by this process.
+!  hdferr         - Returns 0 if successful and -1 if fails.
 !
 ! AUTHOR
-!  Elena Pourmal
-!  May 6, 2003
+!  M. Scot Breitenfeld
+!  July 27, 2012
 !
-! SOURCE
-  SUBROUTINE h5pset_fapl_mpiposix_f(prp_id, comm, use_gpfs, hdferr)
+! HISTORY
+!
+! Fortran90 Interface:
+  SUBROUTINE h5pget_mpio_actual_io_mode_f(dxpl_id, actual_io_mode, hdferr)
     IMPLICIT NONE
-    INTEGER(HID_T), INTENT(IN) :: prp_id ! Property list identifier
-    INTEGER, INTENT(IN) :: comm ! MPI communicator to be used for file open
-                                ! as defined in MPI_FILE_OPEN of MPI-2
-    LOGICAL, INTENT(IN) :: use_gpfs
-    INTEGER, INTENT(OUT) :: hdferr  ! Error code
-!*****
-    INTEGER :: flag
-    INTEGER, EXTERNAL :: h5pset_fapl_mpiposix_c
-    flag = 0
-    IF(use_gpfs) flag = 1
-    hdferr = h5pset_fapl_mpiposix_c(prp_id, comm, flag)
-  END SUBROUTINE h5pset_fapl_mpiposix_f
+    INTEGER(HID_T), INTENT(IN)  :: dxpl_id
+    INTEGER       , INTENT(OUT) :: actual_io_mode
+    INTEGER       , INTENT(OUT) :: hdferr
+!***** 
+    INTERFACE
+       INTEGER FUNCTION h5pget_mpio_actual_io_mode_c(dxpl_id, actual_io_mode)
+         USE H5GLOBAL
+         !DEC$IF DEFINED(HDF5F90_WINDOWS)
+         !DEC$ATTRIBUTES C,reference,decorate,alias:'H5PGET_MPIO_ACTUAL_IO_MODE_C'::h5pget_mpio_actual_io_mode_c
+         !DEC$ENDIF
+         INTEGER(HID_T), INTENT(IN)  :: dxpl_id
+         INTEGER       , INTENT(OUT) :: actual_io_mode
+       END FUNCTION h5pget_mpio_actual_io_mode_c
+    END INTERFACE
 
-!****s* H5FDMPIO/h5pget_fapl_mpiposix_f
-!
-! NAME
-!  h5pget_fapl_mpiposix_f
-!
-! PURPOSE
-!  Returns MPI communicator information.
-!
-! INPUTS
-!  prp_id 	 - file access property list identifier
-! OUTPUTS
-!  comm 	 - MPI-2 communicator
-!  use_gpfs 	 - flag to use GPFS hints
-!  hdferr 	 - Returns 0 if successful and -1 if fails
-! AUTHOR
-!  Elena Pourmal
-!  May 6, 2003
-!
-! SOURCE
-  SUBROUTINE h5pget_fapl_mpiposix_f(prp_id, comm, use_gpfs, hdferr)
-    IMPLICIT NONE
-    INTEGER(HID_T), INTENT(IN) :: prp_id ! Property list identifier
-    INTEGER, INTENT(OUT) :: comm         ! Buffer to return communicator
-    LOGICAL, INTENT(OUT) :: use_gpfs
-    INTEGER, INTENT(OUT) :: hdferr       ! Error code
-!*****
-    INTEGER :: flag
+    actual_io_mode = -1
 
-    INTEGER, EXTERNAL :: h5pget_fapl_mpiposix_c
-    hdferr = h5pget_fapl_mpiposix_c(prp_id, comm, flag)
-    use_gpfs = .FALSE.
-    IF (flag .EQ. 1) use_gpfs = .TRUE.
-  END SUBROUTINE h5pget_fapl_mpiposix_f
+    hdferr = h5pget_mpio_actual_io_mode_c(dxpl_id, actual_io_mode)
+
+  END SUBROUTINE h5pget_mpio_actual_io_mode_f
 
 END MODULE H5FDMPIO

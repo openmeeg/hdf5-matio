@@ -29,7 +29,7 @@
 #include "H5Iprivate.h"		/* ID Functions		  */
 #include "H5MMprivate.h"	/* Memory Management functions		  */
 #include "H5Spkg.h"		/* Dataspace functions			  */
-#include "H5Vprivate.h"         /* Vector functions */
+#include "H5VMprivate.h"         /* Vector functions */
 
 /* Static function prototypes */
 
@@ -120,7 +120,7 @@ H5FL_DEFINE_STATIC(H5S_pnt_list_t);
  *
  *-------------------------------------------------------------------------
  */
-herr_t
+static herr_t
 H5S_point_iter_init(H5S_sel_iter_t *iter, const H5S_t *space)
 {
     FUNC_ENTER_NOAPI_NOINIT_NOERR
@@ -643,7 +643,7 @@ H5S_point_copy(H5S_t *dst, const H5S_t *src, hbool_t UNUSED share_selection)
     } /* end while */
 
 done:
-    if(ret_value < 0) {
+    if(ret_value < 0 && dst->select.sel_info.pnt_lst) {
         /* Traverse the (incomplete?) dst list, freeing all memory */
         curr = dst->select.sel_info.pnt_lst->head;
         while(curr) {
@@ -1136,7 +1136,7 @@ done:
  EXAMPLES
  REVISION LOG
 --------------------------------------------------------------------------*/
-herr_t
+static herr_t
 H5S_point_offset(const H5S_t *space, hsize_t *offset)
 {
     const hsize_t *pnt;         /* Pointer to a selected point's coordinates */
@@ -1316,7 +1316,7 @@ H5S_point_is_regular(const H5S_t *space)
  EXAMPLES
  REVISION LOG
 --------------------------------------------------------------------------*/
-herr_t
+static herr_t
 H5S_point_adjust_u(H5S_t *space, const hsize_t *offset)
 {
     H5S_pnt_node_t *node;               /* Point node */
@@ -1383,7 +1383,7 @@ H5S_point_project_scalar(const H5S_t *space, hsize_t *offset)
         HGOTO_ERROR(H5E_DATASPACE, H5E_BADRANGE, FAIL, "point selection of one element has more than one node!")
 
     /* Calculate offset of selection in projected buffer */
-    *offset = H5V_array_offset(space->extent.rank, space->extent.size, node->pnt); 
+    *offset = H5VM_array_offset(space->extent.rank, space->extent.size, node->pnt); 
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
@@ -1437,7 +1437,7 @@ H5S_point_project_simple(const H5S_t *base_space, H5S_t *new_space, hsize_t *off
         /* Calculate offset of selection in projected buffer */
         HDmemset(block, 0, sizeof(block));
         HDmemcpy(block, base_space->select.sel_info.pnt_lst->head->pnt, sizeof(hsize_t) * rank_diff);
-        *offset = H5V_array_offset(base_space->extent.rank, base_space->extent.size, block); 
+        *offset = H5VM_array_offset(base_space->extent.rank, base_space->extent.size, block); 
 
         /* Iterate through base space's point nodes, copying the point information */
         base_node = base_space->select.sel_info.pnt_lst->head;

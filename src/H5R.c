@@ -13,12 +13,19 @@
  * access to either file, you may request a copy from help@hdfgroup.org.     *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
+/****************/
+/* Module Setup */
+/****************/
+
 #define H5R_PACKAGE		/*suppress error about including H5Rpkg   */
 
 /* Interface initialization */
 #define H5_INTERFACE_INIT_FUNC	H5R_init_interface
 
 
+/***********/
+/* Headers */
+/***********/
 #include "H5private.h"		/* Generic Functions			*/
 #include "H5ACprivate.h"        /* Metadata cache                       */
 #include "H5Dprivate.h"		/* Datasets				*/
@@ -30,12 +37,21 @@
 #include "H5Rpkg.h"		/* References				*/
 #include "H5Sprivate.h"		/* Dataspaces 				*/
 
-/* Local macro definitions */
 
-/* Number of reserved IDs in ID group */
-#define H5R_RESERVED_ATOMS  0
+/****************/
+/* Local Macros */
+/****************/
 
-/* Static functions */
+
+/******************/
+/* Local Typedefs */
+/******************/
+
+
+/********************/
+/* Local Prototypes */
+/********************/
+
 static herr_t H5R_create(void *ref, H5G_loc_t *loc, const char *name,
         H5R_type_t ref_type, H5S_t *space, hid_t dxpl_id);
 static hid_t H5R_dereference(H5F_t *file, hid_t dxpl_id, H5R_type_t ref_type,
@@ -43,6 +59,30 @@ static hid_t H5R_dereference(H5F_t *file, hid_t dxpl_id, H5R_type_t ref_type,
 static H5S_t * H5R_get_region(H5F_t *file, hid_t dxpl_id, const void *_ref);
 static ssize_t H5R_get_name(H5F_t *file, hid_t lapl_id, hid_t dxpl_id, hid_t id,
     H5R_type_t ref_type, const void *_ref, char *name, size_t size);
+
+
+/*********************/
+/* Package Variables */
+/*********************/
+
+
+/*****************************/
+/* Library Private Variables */
+/*****************************/
+
+
+/*******************/
+/* Local Variables */
+/*******************/
+
+/* Reference ID class */
+static const H5I_class_t H5I_REFERENCE_CLS[1] = {{
+    H5I_REFERENCE,		/* ID class value */
+    H5I_CLASS_REUSE_IDS,	/* Class flags */
+    0,				/* # of reserved IDs for class */
+    NULL			/* Callback routine for closing objects of this class */
+}};
+
 
 
 /*-------------------------------------------------------------------------
@@ -91,7 +131,7 @@ H5R_init_interface(void)
     FUNC_ENTER_NOAPI_NOINIT
 
     /* Initialize the atom group for the file IDs */
-    if(H5I_register_type(H5I_REFERENCE, (size_t)H5I_REFID_HASHSIZE, H5R_RESERVED_ATOMS, (H5I_free_t)NULL) < 0)
+    if(H5I_register_type(H5I_REFERENCE_CLS) < 0)
 	HGOTO_ERROR(H5E_REFERENCE, H5E_CANTINIT, FAIL, "unable to initialize interface");
 
 done:
@@ -119,22 +159,30 @@ done:
 int
 H5R_term_interface(void)
 {
-    int	n=0;
+    int	n = 0;
 
     FUNC_ENTER_NOAPI_NOINIT_NOERR
 
     if (H5_interface_initialize_g) {
-	if ((n=H5I_nmembers(H5I_REFERENCE))) {
-	    H5I_clear_type(H5I_REFERENCE, FALSE, FALSE);
-	} else {
-	    H5I_dec_type_ref(H5I_REFERENCE);
+	if(H5I_nmembers(H5I_REFERENCE) > 0) {
+	    (void)H5I_clear_type(H5I_REFERENCE, FALSE, FALSE);
+            n++; /*H5I*/
+	} /* end if */
+        else {
+            /* Close deprecated interface */
+            n += H5R__term_deprec_interface();
+
+            /* Destroy the reference id group */
+	    (void)H5I_dec_type_ref(H5I_REFERENCE);
+            n++; /*H5I*/
+
+            /* Mark closed */
 	    H5_interface_initialize_g = 0;
-	    n = 1; /*H5I*/
-	}
-    }
+	} /* end else */
+    } /* end if */
 
     FUNC_LEAVE_NOAPI(n)
-}
+} /* end H5R_term_interface() */
 
 
 /*--------------------------------------------------------------------------
@@ -178,7 +226,7 @@ H5R_create(void *_ref, H5G_loc_t *loc, const char *name, H5R_type_t ref_type, H5
     HDassert(_ref);
     HDassert(loc);
     HDassert(name);
-    HDassert(ref_type > H5R_BADTYPE || ref_type < H5R_MAXTYPE);
+    HDassert(ref_type > H5R_BADTYPE && ref_type < H5R_MAXTYPE);
 
     /* Set up object location to fill in */
     obj_loc.oloc = &oloc;
@@ -233,7 +281,7 @@ H5R_create(void *_ref, H5G_loc_t *loc, const char *name, H5R_type_t ref_type, H5
                 HGOTO_ERROR(H5E_REFERENCE, H5E_CANTINIT, FAIL, "Invalid amount of space for serializing selection")
 
             /* Increase buffer size to allow for the dataset OID */
-            buf_size += sizeof(haddr_t);
+            buf_size += (hssize_t)sizeof(haddr_t);
 
             /* Allocate the space to store the serialized information */
             H5_CHECK_OVERFLOW(buf_size, hssize_t, size_t);
@@ -256,7 +304,7 @@ H5R_create(void *_ref, H5G_loc_t *loc, const char *name, H5R_type_t ref_type, H5
             /* Serialize the heap ID and index for storage in the file */
             p = (uint8_t *)ref;
             H5F_addr_encode(loc->oloc->file, &p, hobjid.addr);
-            INT32ENCODE(p, hobjid.idx);
+            UINT32ENCODE(p, hobjid.idx);
 
             /* Free the buffer we serialized data in */
             H5MM_xfree(buf);
@@ -375,7 +423,7 @@ H5R_dereference(H5F_t *file, hid_t dxpl_id, H5R_type_t ref_type, const void *_re
     FUNC_ENTER_NOAPI_NOINIT
 
     HDassert(_ref);
-    HDassert(ref_type > H5R_BADTYPE || ref_type < H5R_MAXTYPE);
+    HDassert(ref_type > H5R_BADTYPE && ref_type < H5R_MAXTYPE);
     HDassert(file);
 
     /* Initialize the object location */
@@ -396,7 +444,7 @@ H5R_dereference(H5F_t *file, hid_t dxpl_id, H5R_type_t ref_type, const void *_re
             /* Get the heap ID for the dataset region */
             p = (const uint8_t *)_ref;
             H5F_addr_decode(oloc.file, &p, &(hobjid.addr));
-            INT32DECODE(p, hobjid.idx);
+            UINT32DECODE(p, hobjid.idx);
 
             /* Get the dataset region from the heap (allocate inside routine) */
             if(NULL == (buf = (uint8_t *)H5HG_read(oloc.file, dxpl_id, &hobjid, NULL, NULL)))
@@ -477,6 +525,8 @@ H5R_dereference(H5F_t *file, hid_t dxpl_id, H5R_type_t ref_type, const void *_re
             } /* end case */
             break;
 
+        case H5O_TYPE_UNKNOWN:
+        case H5O_TYPE_NTYPES:
         default:
             HGOTO_ERROR(H5E_REFERENCE, H5E_BADTYPE, FAIL, "can't identify type of object referenced")
      } /* end switch */
@@ -531,7 +581,7 @@ H5Rdereference(hid_t id, H5R_type_t ref_type, const void *_ref)
 
     /* Create reference */
     if((ret_value = H5R_dereference(file, H5AC_dxpl_id, ref_type, _ref, TRUE)) < 0)
-        HGOTO_ERROR(H5E_REFERENCE, H5E_CANTINIT, FAIL, "unable dereference object")
+        HGOTO_ERROR(H5E_REFERENCE, H5E_CANTINIT, FAIL, "unable to dereference object")
 
 done:
     FUNC_LEAVE_API(ret_value)
@@ -580,7 +630,7 @@ H5R_get_region(H5F_t *file, hid_t dxpl_id, const void *_ref)
     /* Get the heap ID for the dataset region */
     p = (const uint8_t *)_ref;
     H5F_addr_decode(oloc.file, &p, &(hobjid.addr));
-    INT32DECODE(p, hobjid.idx);
+    UINT32DECODE(p, hobjid.idx);
 
     /* Get the dataset region from the heap (allocate inside routine) */
     if((buf = (uint8_t *)H5HG_read(oloc.file, dxpl_id, &hobjid, NULL, NULL)) == NULL)
@@ -715,7 +765,7 @@ H5R_get_obj_type(H5F_t *file, hid_t dxpl_id, H5R_type_t ref_type,
             /* Get the heap ID for the dataset region */
             p = (const uint8_t *)_ref;
             H5F_addr_decode(oloc.file, &p, &(hobjid.addr));
-            INT32DECODE(p, hobjid.idx);
+            UINT32DECODE(p, hobjid.idx);
 
             /* Get the dataset region from the heap (allocate inside routine) */
             if((buf = (uint8_t *)H5HG_read(oloc.file, dxpl_id, &hobjid, NULL, NULL)) == NULL)
@@ -825,7 +875,7 @@ done:
  EXAMPLES
  REVISION LOG
 --------------------------------------------------------------------------*/
-ssize_t
+static ssize_t
 H5R_get_name(H5F_t *f, hid_t lapl_id, hid_t dxpl_id, hid_t id, H5R_type_t ref_type,
     const void *_ref, char *name, size_t size)
 {
@@ -859,7 +909,7 @@ H5R_get_name(H5F_t *f, hid_t lapl_id, hid_t dxpl_id, hid_t id, H5R_type_t ref_ty
             /* Get the heap ID for the dataset region */
             p = (const uint8_t *)_ref;
             H5F_addr_decode(oloc.file, &p, &(hobjid.addr));
-            INT32DECODE(p, hobjid.idx);
+            UINT32DECODE(p, hobjid.idx);
 
             /* Get the dataset region from the heap (allocate inside routine) */
             if((buf = (uint8_t *)H5HG_read(oloc.file, dxpl_id, &hobjid, NULL, NULL)) == NULL)

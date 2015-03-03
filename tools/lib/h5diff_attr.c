@@ -108,17 +108,17 @@ static void table_attrs_free( table_attrs_t *table )
  *------------------------------------------------------------------------*/
 static void table_attr_mark_exist(unsigned *exist, char *name, table_attrs_t *table)
 {
-    unsigned int new;
+    size_t new_val;
 
     if(table->nattrs == table->size) {
         table->size = MAX(1, table->size * 2);
         table->attrs = (match_attr_t *)HDrealloc(table->attrs, table->size * sizeof(match_attr_t));
     } /* end if */
 
-    new = table->nattrs++;
-    table->attrs[new].exist[0] = exist[0];
-    table->attrs[new].exist[1] = exist[1];
-    table->attrs[new].name = (char *)HDstrdup(name);
+    new_val = table->nattrs++;
+    table->attrs[new_val].exist[0] = exist[0];
+    table->attrs[new_val].exist[1] = exist[1];
+    table->attrs[new_val].name = (char *)HDstrdup(name);
 }
 
 /*-------------------------------------------------------------------------
@@ -169,7 +169,7 @@ static herr_t build_match_list_attrs(hid_t loc1_id, hid_t loc2_id, table_attrs_t
         if((attr1_id = H5Aopen_by_idx(loc1_id, ".", H5_INDEX_NAME, H5_ITER_INC, (hsize_t)curr1, H5P_DEFAULT, H5P_DEFAULT)) < 0)
             goto error;
         /* get name */
-        if(H5Aget_name(attr1_id, ATTR_NAME_MAX, name1) < 0)
+        if(H5Aget_name(attr1_id, (size_t)ATTR_NAME_MAX, name1) < 0)
             goto error;
 
         /*------------------ 
@@ -177,7 +177,7 @@ static herr_t build_match_list_attrs(hid_t loc1_id, hid_t loc2_id, table_attrs_t
         if((attr2_id = H5Aopen_by_idx(loc2_id, ".", H5_INDEX_NAME, H5_ITER_INC, (hsize_t)curr2, H5P_DEFAULT, H5P_DEFAULT)) < 0)
             goto error;
         /* get name */
-        if(H5Aget_name(attr2_id, ATTR_NAME_MAX, name2) < 0)
+        if(H5Aget_name(attr2_id, (size_t)ATTR_NAME_MAX, name2) < 0)
             goto error;
 
         /* criteria is string compare */
@@ -207,6 +207,12 @@ static herr_t build_match_list_attrs(hid_t loc1_id, hid_t loc2_id, table_attrs_t
             table_lp->nattrs_only2++;
             curr2++;
         }
+
+        /* close for next turn */
+        H5Aclose(attr1_id);
+        attr1_id = -1;
+        H5Aclose(attr2_id);
+        attr2_id = -1;
     } /* end while */
 
     /* list1 did not end */
@@ -219,12 +225,16 @@ static herr_t build_match_list_attrs(hid_t loc1_id, hid_t loc2_id, table_attrs_t
         if((attr1_id = H5Aopen_by_idx(loc1_id, ".", H5_INDEX_NAME, H5_ITER_INC, (hsize_t)curr1, H5P_DEFAULT, H5P_DEFAULT)) < 0)
             goto error;
         /* get name */
-        if(H5Aget_name(attr1_id, ATTR_NAME_MAX, name1) < 0)
+        if(H5Aget_name(attr1_id, (size_t)ATTR_NAME_MAX, name1) < 0)
             goto error;
 
         table_attr_mark_exist(infile, name1, table_lp);
         table_lp->nattrs_only1++;
         curr1++;
+
+        /* close for next turn */
+        H5Aclose(attr1_id);
+        attr1_id = -1;
     }
 
     /* list2 did not end */
@@ -237,12 +247,15 @@ static herr_t build_match_list_attrs(hid_t loc1_id, hid_t loc2_id, table_attrs_t
         if((attr2_id = H5Aopen_by_idx(loc2_id, ".", H5_INDEX_NAME, H5_ITER_INC, (hsize_t)curr2, H5P_DEFAULT, H5P_DEFAULT)) < 0)
             goto error;
         /* get name */
-        if(H5Aget_name(attr2_id, ATTR_NAME_MAX, name2) < 0)
+        if(H5Aget_name(attr2_id, (size_t)ATTR_NAME_MAX, name2) < 0)
             goto error;
 
         table_attr_mark_exist(infile, name2, table_lp);
         table_lp->nattrs_only2++;
         curr2++;
+
+        /* close for next turn */
+        H5Aclose(attr2_id);
     }
 
     /*------------------------------------------------------
@@ -272,6 +285,11 @@ static herr_t build_match_list_attrs(hid_t loc1_id, hid_t loc2_id, table_attrs_t
     return 0;
 
 error:
+    if (0 < attr1_id)
+        H5Aclose(attr1_id);
+    if (0 < attr2_id)
+        H5Aclose(attr2_id);
+
     return -1;
 }
 
@@ -308,12 +326,16 @@ hsize_t diff_attr(hid_t loc1_id,
     hid_t      space2_id=-1;    /* space ID */
     hid_t      ftype1_id=-1;    /* file data type ID */
     hid_t      ftype2_id=-1;    /* file data type ID */
+    int	       vstrtype1=0;     /* ftype1 is a variable string */
+    int	       vstrtype2=0;     /* ftype2 is a variable string */
     hid_t      mtype1_id=-1;    /* memory data type ID */
     hid_t      mtype2_id=-1;    /* memory data type ID */
     size_t     msize1;          /* memory size of memory type */
     size_t     msize2;          /* memory size of memory type */
     void       *buf1=NULL;      /* data buffer */
     void       *buf2=NULL;      /* data buffer */
+    int	       buf1hasdata=0;	/* buffer has data */
+    int	       buf2hasdata=0;	/* buffer has data */
     hsize_t    nelmts1;         /* number of elements in dataset */
     int        rank1;           /* rank of dataset */
     int        rank2;           /* rank of dataset */
@@ -331,6 +353,13 @@ hsize_t diff_attr(hid_t loc1_id,
     table_attrs_t * match_list_attrs = NULL;
     if( build_match_list_attrs(loc1_id, loc2_id, &match_list_attrs, options) < 0)
         goto error;
+
+    /* if detect any unique extra attr */
+    if(match_list_attrs->nattrs_only1 || match_list_attrs->nattrs_only2)
+    {
+        /* exit will be 1 */
+        options->contents = 0;
+    }
 
     for(u = 0; u < (unsigned)match_list_attrs->nattrs; u++)
     {
@@ -351,8 +380,19 @@ hsize_t diff_attr(hid_t loc1_id,
         /* get the datatypes  */
         if((ftype1_id = H5Aget_type(attr1_id)) < 0)
             goto error;
+	vstrtype1 = H5Tis_variable_str(ftype1_id);
         if((ftype2_id = H5Aget_type(attr2_id)) < 0)
             goto error;
+	vstrtype2 = H5Tis_variable_str(ftype2_id);
+	/* no compare if either one but not both are variable string type */
+	if (vstrtype1 != vstrtype2){
+	    if ((options->m_verbose||options->m_list_not_cmp))
+		parallel_print("Not comparable: one of attribute <%s/%s> or <%s/%s> is of variable length type\n",
+		    path1, name1, path2, name2);
+	    options->not_cmp = 1;
+	    return 0;
+	}
+
         if((mtype1_id = h5tools_get_native_type(ftype1_id))<0)
             goto error;
         if((mtype2_id = h5tools_get_native_type(ftype2_id))<0)
@@ -405,6 +445,14 @@ hsize_t diff_attr(hid_t loc1_id,
             continue;
         }
 
+       /*-----------------------------------------------------------------
+        * "upgrade" the smaller memory size
+        *------------------------------------------------------------------
+        */
+        if (FAIL == match_up_memsize (ftype1_id, ftype2_id,
+                                      &mtype1_id, &mtype2_id, 
+                                      &msize1, &msize2))
+            goto error;
 
         /*---------------------------------------------------------------------
         * read
@@ -414,20 +462,26 @@ hsize_t diff_attr(hid_t loc1_id,
         for(j = 0; j < rank1; j++)
             nelmts1 *= dims1[j];
 
-        buf1 = (void *)HDmalloc((unsigned)(nelmts1 * msize1));
-        buf2 = (void *)HDmalloc((unsigned)(nelmts1 * msize2));
-        if(buf1 == NULL || buf2 == NULL) {
+        buf1 = (void *)HDmalloc((size_t)(nelmts1 * msize1));
+        buf2 = (void *)HDmalloc((size_t)(nelmts1 * msize2));
+        if(buf1 == NULL || buf2 == NULL){
             parallel_print( "cannot read into memory\n" );
             goto error;
         }
-        if(H5Aread(attr1_id,mtype1_id,buf1) < 0)
-            goto error;
-        if(H5Aread(attr2_id,mtype2_id,buf2) < 0)
-            goto error;
+        if(H5Aread(attr1_id,mtype1_id,buf1) < 0){
+	    parallel_print("Failed reading attribute1 %s/%s\n", path1, name1);
+	    goto error;
+	}else
+	    buf1hasdata = 1;
+        if(H5Aread(attr2_id,mtype2_id,buf2) < 0){
+	    parallel_print("Failed reading attribute2 %s/%s\n", path2, name2);
+	    goto error;
+	}else
+	    buf2hasdata = 1;
 
         /* format output string */
-        sprintf(np1,"%s of <%s>",name1,path1);
-        sprintf(np2,"%s of <%s>",name2,path2);
+        HDsnprintf(np1, sizeof(np1), "%s of <%s>", name1, path1);
+        HDsnprintf(np2, sizeof(np1), "%s of <%s>", name2, path2);
 
         /*---------------------------------------------------------------------
         * array compare
@@ -471,8 +525,8 @@ hsize_t diff_attr(hid_t loc1_id,
         if(TRUE == h5tools_detect_vlen(mtype1_id))
             H5Dvlen_reclaim(mtype1_id, space1_id, H5P_DEFAULT, buf1);
         HDfree(buf1);
-
         buf1 = NULL;
+
         if(TRUE == h5tools_detect_vlen(mtype2_id))
             H5Dvlen_reclaim(mtype2_id, space2_id, H5P_DEFAULT, buf2);
         HDfree(buf2);
@@ -506,12 +560,12 @@ hsize_t diff_attr(hid_t loc1_id,
 error:
     H5E_BEGIN_TRY {
         if(buf1) {
-            if(TRUE == h5tools_detect_vlen(mtype1_id))
+            if(buf1hasdata && TRUE == h5tools_detect_vlen(mtype1_id))
                 H5Dvlen_reclaim(mtype1_id, space1_id, H5P_DEFAULT, buf1);
             HDfree(buf1);
         } /* end if */
         if(buf2) {
-            if(TRUE == h5tools_detect_vlen(mtype2_id))
+            if(buf2hasdata && TRUE == h5tools_detect_vlen(mtype2_id))
                 H5Dvlen_reclaim(mtype2_id, space2_id, H5P_DEFAULT, buf2);
             HDfree(buf2);
         } /* end if */

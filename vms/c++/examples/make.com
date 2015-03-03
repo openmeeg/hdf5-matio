@@ -15,7 +15,7 @@ $!#
 $!
 $! Make HDF5 C++ examples
 $!
-$ define zlib_dir disk$user:[hdfgroup.zlib-1_2_5_ieee]
+$ define zlib_dir SYS$SYSUSERS:[lu.zlib-1_2_5]
 $ cxxopt = "/float=ieee_float/standard=strict_ansi/define=H5_VMS/include=zlib_dir"
 $ ccc := cxx 'cxxopt /include=([-.-.include])
 $!
@@ -24,7 +24,17 @@ $ cxxobj= "chunks.cxx, compound.cxx, create.cxx, extend_ds.cxx, h5group.cxx, "+-
           "readdata.cxx, writedata.cxx"
 $! 
 $!                              
-$ ccc 'cxxobj
+$! ccc 'cxxobj
+$! Somehow, the C++ compiler doesn't like the list of source files.
+$!
+$ ccc chunks.cxx
+$ ccc compound.cxx
+$ ccc create.cxx
+$ ccc extend_ds.cxx
+$ ccc h5group.cxx
+$ ccc readdata.cxx
+$ ccc writedata.cxx
+$!         
 $ type sys$input
 
        Creating chunks 

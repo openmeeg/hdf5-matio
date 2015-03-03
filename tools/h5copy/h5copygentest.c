@@ -237,10 +237,10 @@ static void gent_named_vl(hid_t loc_id)
 
     /* allocate and initialize VL dataset to write */
     buf[0].len = 1;
-    buf[0].p = malloc( 1 * sizeof(int));
+    buf[0].p = HDmalloc( 1 * sizeof(int));
     ((int *)buf[0].p)[0]=1;
     buf[1].len = 2;
-    buf[1].p = malloc( 2 * sizeof(int));
+    buf[1].p = HDmalloc( 2 * sizeof(int));
     ((int *)buf[1].p)[0]=2;
     ((int *)buf[1].p)[1]=3;
 
@@ -283,16 +283,16 @@ static void gent_nested_vl(hid_t loc_id)
 
     /* allocate and initialize VL dataset to write */
     buf[0].len = 1;
-    buf[0].p = malloc( 1 * sizeof(hvl_t));
-    tvl = buf[0].p;
-    tvl->p = malloc( 1 * sizeof(int) );
+    buf[0].p = HDmalloc( 1 * sizeof(hvl_t));
+    tvl = (hvl_t *)buf[0].p;
+    tvl->p = HDmalloc( 1 * sizeof(int) );
     tvl->len = 1;
     ((int *)tvl->p)[0]=1;
 
     buf[1].len = 1;
-    buf[1].p = malloc( 1 * sizeof(hvl_t));
-    tvl = buf[1].p;
-    tvl->p = malloc( 2 * sizeof(int) );
+    buf[1].p = HDmalloc( 1 * sizeof(hvl_t));
+    tvl = (hvl_t *)buf[1].p;
+    tvl->p = HDmalloc( 2 * sizeof(int) );
     tvl->len = 2;
     ((int *)tvl->p)[0]=2;
     ((int *)tvl->p)[1]=3;
@@ -454,23 +454,23 @@ static herr_t gen_obj_ref(hid_t loc_id)
 
     /*--------------
      * add group  */
-     oid = H5Gcreate2 (loc_id, OBJ_REF_GRP, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    oid = H5Gcreate2 (loc_id, OBJ_REF_GRP, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     if (oid < 0)
     {
         fprintf(stderr, "Error: %s %d> H5Gcreate2 failed.\n", FUNC, __LINE__);
         ret = FAIL;
         goto out;
     }
-     H5Gclose(oid);
+    H5Gclose(oid);
 
-    status = H5Rcreate (&or_data[0], loc_id, OBJ_REF_DS, H5R_OBJECT, -1);
+    status = H5Rcreate (&or_data[0], loc_id, OBJ_REF_DS, H5R_OBJECT, (hid_t)-1);
     if (status < 0)
     {
         fprintf(stderr, "Error: %s %d> H5Rcreate failed.\n", FUNC, __LINE__);
         ret = FAIL;
         goto out;
     }
-    status = H5Rcreate (&or_data[1], loc_id, OBJ_REF_GRP, H5R_OBJECT, -1);
+    status = H5Rcreate (&or_data[1], loc_id, OBJ_REF_GRP, H5R_OBJECT, (hid_t)-1);
     if (status < 0)
     {
         fprintf(stderr, "Error: %s %d> H5Rcreate failed.\n", FUNC, __LINE__);
@@ -642,7 +642,7 @@ out:
  * Purpose: Testing with various objects
  *
  *------------------------------------------------------------------------*/
-static void Test_Obj_Copy()
+static void Test_Obj_Copy(void)
 {
     hid_t fid=0;
 
@@ -673,7 +673,7 @@ out:
  * Purpose: Testing with various references
  *
  *------------------------------------------------------------------------*/
-static void Test_Ref_Copy()
+static void Test_Ref_Copy(void)
 {
     hid_t fid=0;
     herr_t status;
@@ -839,7 +839,7 @@ out:
  * Purpose: gerenate external link files
  *
  *------------------------------------------------------------------------*/
-static void Test_Extlink_Copy()
+static void Test_Extlink_Copy(void)
 {
     hid_t fid1=0;
     hid_t fid2=0;

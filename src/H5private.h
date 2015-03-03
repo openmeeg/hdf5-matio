@@ -94,13 +94,13 @@
 
 /*
  * If a program may include both `time.h' and `sys/time.h' then
- * TIME_WITH_SYS_TIME is defined (see AC_HEADER_TIME in configure.in).
+ * TIME_WITH_SYS_TIME is defined (see AC_HEADER_TIME in configure.ac).
  * On some older systems, `sys/time.h' includes `time.h' but `time.h' is not
  * protected against multiple inclusion, so programs should not explicitly
  * include both files. This macro is useful in programs that use, for example,
  * `struct timeval' or `struct timezone' as well as `struct tm'.  It is best
  * used in conjunction with `HAVE_SYS_TIME_H', whose existence is checked
- * by `AC_CHECK_HEADERS(sys/time.h)' in configure.in.
+ * by `AC_CHECK_HEADERS(sys/time.h)' in configure.ac.
  */
 #if defined(H5_TIME_WITH_SYS_TIME)
 #   include <sys/time.h>
@@ -149,13 +149,24 @@
 #   include <io.h>
 #endif
 
+/*
+ * Dynamic library handling.  These are needed for dynamically loading I/O
+ * filters and VFDs.
+ */
+#ifdef H5_HAVE_DLFCN_H
+#include <dlfcn.h>
+#endif
+#ifdef H5_HAVE_DIRENT_H
+#include <dirent.h>
+#endif
+
 
 #ifdef H5_HAVE_WIN32_API
 /* The following two defines must be before any windows headers are included */
 #define WIN32_LEAN_AND_MEAN    /* Exclude rarely-used stuff from Windows headers */
 #define NOGDI                  /* Exclude Graphic Display Interface macros */
 
-#ifdef H5_HAVE_WINSOCK_H
+#ifdef H5_HAVE_WINSOCK2_H
 #include <winsock2.h>
 #endif
 
@@ -199,10 +210,11 @@
  */
 #define eventa(func_name)   h5_mpe_eventa
 #define eventb(func_name)   h5_mpe_eventb
-#define MPE_LOG_VARS                                               \
-    static int eventa(FUNC) = -1;                                        \
-    static int eventb(FUNC) = -1;                                        \
-    const char* p_event_start = "start" FUNC;
+#define MPE_LOG_VARS                                                    \
+    static int h5_mpe_eventa = -1;                                      \
+    static int h5_mpe_eventb = -1;                                      \
+    static char p_event_start[128];                                     \
+    static char p_event_end[128];
 
 /* Hardwire the color to "red", since that's what all the routines are using
  * now.  In the future, if we want to change that color for a given routine,
@@ -211,15 +223,18 @@
  * color information down to the BEGIN_MPE_LOG macro (which should have a new
  * BEGIN_MPE_LOG_COLOR variant). -QAK
  */
-#define BEGIN_MPE_LOG                                              \
-  if (H5_MPEinit_g){                    \
-    if (eventa(FUNC) == -1 && eventb(FUNC) == -1) {          \
-  const char* p_color = "red";                \
-         eventa(FUNC)=MPE_Log_get_event_number();                        \
-         eventb(FUNC)=MPE_Log_get_event_number();                        \
-         MPE_Describe_state(eventa(FUNC), eventb(FUNC), (char *)FUNC, (char *)p_color); \
-    }                                                                         \
-    MPE_Log_event(eventa(FUNC), 0, (char *)p_event_start);                 \
+#define BEGIN_MPE_LOG                                                   \
+  if(H5_MPEinit_g) {                                                    \
+    if(h5_mpe_eventa == -1 && h5_mpe_eventb == -1) {                    \
+         const char *p_color = "red";                                   \
+                                                                        \
+         h5_mpe_eventa = MPE_Log_get_event_number();                    \
+         h5_mpe_eventb = MPE_Log_get_event_number();                    \
+         HDsnprintf(p_event_start, sizeof(p_event_start) - 1, "start_%s", FUNC); \
+         HDsnprintf(p_event_end, sizeof(p_event_end) - 1, "end_%s", FUNC); \
+         MPE_Describe_state(h5_mpe_eventa, h5_mpe_eventb, (char *)FUNC, (char *)p_color); \
+    }                                                                   \
+    MPE_Log_event(h5_mpe_eventa, 0, p_event_start);                     \
   }
 
 
@@ -229,9 +244,9 @@
  *
  * Programmer: Long Wang
  */
-#define FINISH_MPE_LOG                                                       \
-    if (H5_MPEinit_g) {                                                      \
-        MPE_Log_event(eventb(FUNC), 0, (char *)FUNC);                 \
+#define FINISH_MPE_LOG                                                  \
+    if(H5_MPEinit_g) {                                                  \
+        MPE_Log_event(h5_mpe_eventb, 0, p_event_end);                   \
     }
 
 #else /* H5_HAVE_MPE */
@@ -422,9 +437,27 @@
 /*
  * Maximum & minimum values for our typedefs.
  */
-#define  HSIZET_MAX  ((hsize_t)ULLONG_MAX)
-#define  HSSIZET_MAX  ((hssize_t)LLONG_MAX)
+#define HSIZET_MAX   ((hsize_t)ULLONG_MAX)
+#define HSSIZET_MAX  ((hssize_t)LLONG_MAX)
 #define HSSIZET_MIN  (~(HSSIZET_MAX))
+
+/*
+ * Types and max sizes for POSIX I/O.
+ * OS X (Darwin) is odd since the max I/O size does not match the types.
+ */
+#if defined(H5_HAVE_WIN32_API)
+#   define h5_posix_io_t                unsigned int
+#   define h5_posix_io_ret_t            int
+#   define H5_POSIX_MAX_IO_BYTES        INT_MAX
+#elif defined(H5_HAVE_DARWIN)
+#   define h5_posix_io_t                size_t
+#   define h5_posix_io_ret_t            ssize_t
+#   define H5_POSIX_MAX_IO_BYTES        INT_MAX
+#else
+#   define h5_posix_io_t                size_t
+#   define h5_posix_io_ret_t            ssize_t
+#   define H5_POSIX_MAX_IO_BYTES        SSIZET_MAX
+#endif
 
 /*
  * A macro to portably increment enumerated types.
@@ -507,6 +540,9 @@ typedef struct {
 #ifndef HDasin
     #define HDasin(X)    asin(X)
 #endif /* HDasin */
+#ifndef HDasprintf
+    #define HDasprintf    asprintf /*varargs*/
+#endif /* HDasprintf */
 #ifndef HDassert
     #define HDassert(X)    assert(X)
 #endif /* HDassert */
@@ -809,6 +845,9 @@ H5_DLL int HDfprintf (FILE *stream, const char *fmt, ...);
 #ifndef HDgetgroups
     #define HDgetgroups(Z,G)  getgroups(Z,G)
 #endif /* HDgetgroups */
+#ifndef HDgethostname
+    #define HDgethostname(N,L)    gethostname(N,L)
+#endif /* HDgetlogin */
 #ifndef HDgetlogin
     #define HDgetlogin()    getlogin()
 #endif /* HDgetlogin */
@@ -1449,19 +1488,20 @@ extern char *strdup(const char *s);
 #if defined(H5_HAVE_WINDOW_PATH)
 
 /* directory delimiter for Windows: slash and backslash are acceptable on Windows */
-#define  DIR_SLASH_SEPC     '/'
-#define  DIR_SEPC     '\\'
-#define  DIR_SEPS     "\\"
-#define CHECK_DELIMITER(SS)     ((SS == DIR_SEPC)||(SS == DIR_SLASH_SEPC))
-#define CHECK_ABSOLUTE(NAME)    ((isalpha(NAME[0])) && (NAME[1] == ':') && (CHECK_DELIMITER(NAME[2])))
-#define CHECK_ABS_DRIVE(NAME)   ((isalpha(NAME[0])) && (NAME[1] == ':'))
-#define CHECK_ABS_PATH(NAME)    (CHECK_DELIMITER(NAME[0]))
+#define H5_DIR_SLASH_SEPC       '/'
+#define H5_DIR_SEPC             '\\'
+#define H5_DIR_SEPS             "\\"
+#define H5_CHECK_DELIMITER(SS)     ((SS == H5_DIR_SEPC) || (SS == H5_DIR_SLASH_SEPC))
+#define H5_CHECK_ABSOLUTE(NAME)    ((HDisalpha(NAME[0])) && (NAME[1] == ':') && (H5_CHECK_DELIMITER(NAME[2])))
+#define H5_CHECK_ABS_DRIVE(NAME)   ((HDisalpha(NAME[0])) && (NAME[1] == ':'))
+#define H5_CHECK_ABS_PATH(NAME)    (H5_CHECK_DELIMITER(NAME[0]))
 
-#define GET_LAST_DELIMITER(NAME, ptr) {                 \
+#define H5_GET_LAST_DELIMITER(NAME, ptr) {                 \
     char        *slash, *backslash;                     \
-    slash = strrchr(NAME, DIR_SLASH_SEPC);              \
-    backslash = strrchr(NAME, DIR_SEPC);                \
-    if (backslash > slash)                              \
+                                                        \
+    slash = HDstrrchr(NAME, H5_DIR_SLASH_SEPC);         \
+    backslash = HDstrrchr(NAME, H5_DIR_SEPC);           \
+    if(backslash > slash)                               \
         (ptr = backslash);                              \
     else                                                \
         (ptr = slash);                                  \
@@ -1471,27 +1511,27 @@ extern char *strdup(const char *s);
 
 /* OpenVMS pathname: <disk name>$<partition>:[path]<file name>
  *     i.g. SYS$SYSUSERS:[LU.HDF5.SRC]H5system.c */
-#define    DIR_SEPC  ']'
-#define    DIR_SEPS  "]"
-#define         CHECK_DELIMITER(SS)             (SS == DIR_SEPC)
-#define         CHECK_ABSOLUTE(NAME)            (strrchr(NAME, ':') && strrchr(NAME, '['))
-#define   CHECK_ABS_DRIVE(NAME)           (0)
-#define   CHECK_ABS_PATH(NAME)      (0)
-#define         GET_LAST_DELIMITER(NAME, ptr)   ptr = strrchr(NAME, DIR_SEPC);
+#define H5_DIR_SEPC                     ']'
+#define H5_DIR_SEPS                     "]"
+#define H5_CHECK_DELIMITER(SS)             (SS == H5_DIR_SEPC)
+#define H5_CHECK_ABSOLUTE(NAME)            (HDstrrchr(NAME, ':') && HDstrrchr(NAME, '['))
+#define H5_CHECK_ABS_DRIVE(NAME)           (0)
+#define H5_CHECK_ABS_PATH(NAME)            (0)
+#define H5_GET_LAST_DELIMITER(NAME, ptr)   ptr = HDstrrchr(NAME, H5_DIR_SEPC);
 
 #else
 
-#define    DIR_SEPC  '/'
-#define    DIR_SEPS  "/"
-#define         CHECK_DELIMITER(SS)             (SS == DIR_SEPC)
-#define         CHECK_ABSOLUTE(NAME)            (CHECK_DELIMITER(*NAME))
-#define   CHECK_ABS_DRIVE(NAME)     (0)
-#define   CHECK_ABS_PATH(NAME)      (0)
-#define         GET_LAST_DELIMITER(NAME, ptr)   ptr = strrchr(NAME, DIR_SEPC);
+#define H5_DIR_SEPC             '/'
+#define H5_DIR_SEPS             "/"
+#define H5_CHECK_DELIMITER(SS)     (SS == H5_DIR_SEPC)
+#define H5_CHECK_ABSOLUTE(NAME)    (H5_CHECK_DELIMITER(*NAME))
+#define H5_CHECK_ABS_DRIVE(NAME)   (0)
+#define H5_CHECK_ABS_PATH(NAME)    (0)
+#define H5_GET_LAST_DELIMITER(NAME, ptr)   ptr = HDstrrchr(NAME, H5_DIR_SEPC);
 
 #endif
 
-#define   COLON_SEPC  ':'
+#define   H5_COLON_SEPC  ':'
 
 
 /* Use FUNC to safely handle variations of C99 __func__ keyword handling */
@@ -1693,7 +1733,7 @@ typedef struct H5_api_struct {
 
 /* Macro for first thread initialization */
 #ifdef H5_HAVE_WIN_THREADS
-#define H5_FIRST_THREAD_INIT InitOnceExecuteOnce(&H5TS_first_init_g, H5TS_win32_first_thread_init, NULL, NULL);
+#define H5_FIRST_THREAD_INIT InitOnceExecuteOnce(&H5TS_first_init_g, H5TS_win32_process_enter, NULL, NULL);
 #else
 #define H5_FIRST_THREAD_INIT pthread_once(&H5TS_first_init_g, H5TS_pthread_first_thread_init);
 #endif
@@ -1899,15 +1939,15 @@ static herr_t    H5_INTERFACE_INIT_FUNC(void);
     H5_PUSH_FUNC                                                              \
     {
 
-/* Use the following macro as replacement for the FUNC_ENTER_PACKAGE
- * macro when the function needs to set up a metadata tag. */
-#define FUNC_ENTER_PACKAGE_TAG(dxpl_id, tag, err) {                           \
-    haddr_t prev_tag = HADDR_UNDEF;                                           \
-    hid_t tag_dxpl_id = dxpl_id;                                              \
-                                                                              \
+/* Use this macro for all "normal" staticly-scoped functions */
+#define FUNC_ENTER_STATIC {                                                   \
     FUNC_ENTER_COMMON(H5_IS_PKG(FUNC));                                       \
-    if(H5AC_tag(tag_dxpl_id, tag, &prev_tag) < 0)                             \
-        HGOTO_ERROR(H5E_CACHE, H5E_CANTTAG, err, "unable to apply metadata tag") \
+    H5_PUSH_FUNC                                                              \
+    {
+
+/* Use this macro for staticly-scoped functions which propgate errors, but don't issue them */
+#define FUNC_ENTER_STATIC_NOERR {                                             \
+    FUNC_ENTER_COMMON_NOERR(H5_IS_PKG(FUNC));                                 \
     H5_PUSH_FUNC                                                              \
     {
 
@@ -2019,7 +2059,11 @@ static herr_t    H5_INTERFACE_INIT_FUNC(void);
 #define H5_GLUE4(w,x,y,z)  w##x##y##z
 
 /* Compile-time "assert" macro */
-#define HDcompile_assert(e)     do { enum { compile_assert__ = 1 / (e) }; } while(0)
+#define HDcompile_assert(e)     ((void)sizeof(char[ !!(e) ? 1 : -1]))
+/* Variants that are correct, but generate compile-time warnings in some circumstances:
+  #define HDcompile_assert(e)     do { enum { compile_assert__ = 1 / (e) }; } while(0)
+  #define HDcompile_assert(e)     do { typedef struct { unsigned int b: (e); } x; } while(0)
+*/
 
 /* Private functions, not part of the publicly documented API */
 H5_DLL herr_t H5_init_library(void);
@@ -2036,6 +2080,7 @@ H5_DLL int H5G_term_interface(void);
 H5_DLL int H5I_term_interface(void);
 H5_DLL int H5L_term_interface(void);
 H5_DLL int H5P_term_interface(void);
+H5_DLL int H5PL_term_interface(void);
 H5_DLL int H5R_term_interface(void);
 H5_DLL int H5S_term_interface(void);
 H5_DLL int H5T_term_interface(void);

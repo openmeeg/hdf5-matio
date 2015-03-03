@@ -117,7 +117,7 @@ H5Tvlen_create(hid_t base_id)
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "not an valid base datatype")
 
     /* Create up VL datatype */
-    if((dt = H5T_vlen_create(base)) == NULL)
+    if((dt = H5T__vlen_create(base)) == NULL)
         HGOTO_ERROR(H5E_DATATYPE, H5E_CANTINIT, FAIL, "invalid VL location")
 
     /* Atomize the type */
@@ -130,7 +130,7 @@ done:
 
 
 /*-------------------------------------------------------------------------
- * Function:	H5T_vlen_create
+ * Function:	H5T__vlen_create
  *
  * Purpose:	Create a new variable-length datatype based on the specified
  *		BASE_TYPE.
@@ -145,18 +145,18 @@ done:
  *-------------------------------------------------------------------------
  */
 H5T_t *
-H5T_vlen_create(const H5T_t *base)
+H5T__vlen_create(const H5T_t *base)
 {
     H5T_t	*dt = NULL;		/*new VL datatype	*/
     H5T_t	*ret_value;	/*return value			*/
 
-    FUNC_ENTER_NOAPI_NOINIT
+    FUNC_ENTER_PACKAGE
 
     /* Check args */
     HDassert(base);
 
     /* Build new type */
-    if(NULL == (dt = H5T_alloc()))
+    if(NULL == (dt = H5T__alloc()))
         HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "memory allocation failed")
     dt->shared->type = H5T_VLEN;
 
@@ -187,11 +187,11 @@ done:
             HDONE_ERROR(H5E_DATATYPE, H5E_CANTRELEASE, NULL, "unable to release datatype info")
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5T_vlen_create() */
+} /* end H5T__vlen_create() */
 
 
 /*-------------------------------------------------------------------------
- * Function: H5T_vlen_set_loc
+ * Function: H5T__vlen_set_loc
  *
  * Purpose:	Sets the location of a VL datatype to be either on disk or in memory
  *
@@ -207,11 +207,11 @@ done:
  *-------------------------------------------------------------------------
  */
 htri_t
-H5T_vlen_set_loc(const H5T_t *dt, H5F_t *f, H5T_loc_t loc)
+H5T__vlen_set_loc(const H5T_t *dt, H5F_t *f, H5T_loc_t loc)
 {
     htri_t ret_value = FALSE;   /* Indicate success, but no location change */
 
-    FUNC_ENTER_NOAPI_NOINIT
+    FUNC_ENTER_PACKAGE
 
     /* check parameters */
     HDassert(dt);
@@ -298,7 +298,7 @@ H5T_vlen_set_loc(const H5T_t *dt, H5F_t *f, H5T_loc_t loc)
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
-}   /* end H5T_vlen_set_loc() */
+}   /* end H5T__vlen_set_loc() */
 
 
 /*-------------------------------------------------------------------------
@@ -882,7 +882,7 @@ H5T_vlen_disk_read(H5F_t *f, hid_t dxpl_id, void *_vl, void *buf, size_t UNUSED 
 
     /* Get the heap information */
     H5F_addr_decode(f,(const uint8_t **)&vl,&(hobjid.addr));
-    INT32DECODE(vl,hobjid.idx);
+    UINT32DECODE(vl,hobjid.idx);
 
     /* Check if this sequence actually has any data */
     if(hobjid.addr>0) {
@@ -935,7 +935,7 @@ H5T_vlen_disk_write(H5F_t *f, hid_t dxpl_id, const H5T_vlen_alloc_info_t UNUSED 
 
         /* Get heap information */
         H5F_addr_decode(f, (const uint8_t **)&bg, &(bg_hobjid.addr));
-        INT32DECODE(bg, bg_hobjid.idx);
+        UINT32DECODE(bg, bg_hobjid.idx);
 
         /* Free heap object for old data */
         if(bg_hobjid.addr > 0) {
@@ -955,7 +955,7 @@ H5T_vlen_disk_write(H5F_t *f, hid_t dxpl_id, const H5T_vlen_alloc_info_t UNUSED 
 
     /* Encode the heap information */
     H5F_addr_encode(f, &vl, hobjid.addr);
-    INT32ENCODE(vl, hobjid.idx);
+    UINT32ENCODE(vl, hobjid.idx);
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
@@ -997,7 +997,7 @@ H5T_vlen_disk_setnull(H5F_t *f, hid_t dxpl_id, void *_vl, void *_bg)
 
         /* Get heap information */
         H5F_addr_decode(f, (const uint8_t **)&bg, &(bg_hobjid.addr));
-        INT32DECODE(bg, bg_hobjid.idx);
+        UINT32DECODE(bg, bg_hobjid.idx);
 
         /* Free heap object for old data */
         if(bg_hobjid.addr > 0) {
@@ -1012,7 +1012,7 @@ H5T_vlen_disk_setnull(H5F_t *f, hid_t dxpl_id, void *_vl, void *_bg)
 
     /* Encode the "nil" heap pointer information */
     H5F_addr_encode(f, &vl, (haddr_t)0);
-    INT32ENCODE(vl, 0);
+    UINT32ENCODE(vl, 0);
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)

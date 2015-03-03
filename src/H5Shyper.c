@@ -28,7 +28,7 @@
 #include "H5FLprivate.h"	/* Free Lists				*/
 #include "H5Iprivate.h"		/* ID Functions				*/
 #include "H5Spkg.h"		/* Dataspace functions			*/
-#include "H5Vprivate.h"         /* Vector functions			*/
+#include "H5VMprivate.h"         /* Vector functions			*/
 
 /* Local datatypes */
 
@@ -234,7 +234,7 @@ H5S_hyper_print_diminfo(FILE *f, const H5S_t *space)
  *
  *-------------------------------------------------------------------------
  */
-herr_t
+static herr_t
 H5S_hyper_iter_init(H5S_sel_iter_t *iter, const H5S_t *space)
 {
     const H5S_hyper_dim_t *tdiminfo;    /* Temporary pointer to diminfo information */
@@ -464,7 +464,7 @@ H5S_hyper_iter_coords (const H5S_sel_iter_t *iter, hsize_t *coords)
                     HDassert(v >= 0);
 
                     /* Compute the coords for the flattened dimensions */
-                    H5V_array_calc(iter->u.hyp.off[v], (unsigned)((begin - u) + 1), &(iter->dims[u]), &(coords[u]));
+                    H5VM_array_calc(iter->u.hyp.off[v], (unsigned)((begin - u) + 1), &(iter->dims[u]), &(coords[u]));
 
                     /* Continue to faster dimension in both indices */
                     u--;
@@ -1614,7 +1614,7 @@ done:
  EXAMPLES
  REVISION LOG
 --------------------------------------------------------------------------*/
-herr_t
+static herr_t
 H5S_hyper_copy (H5S_t *dst, const H5S_t *src, hbool_t share_selection)
 {
     H5S_hyper_sel_t *dst_hslab;         /* Pointer to destination hyperslab info */
@@ -1749,7 +1749,7 @@ H5S_hyper_is_valid_helper (const H5S_hyper_span_info_t *spans, const hssize_t *o
  EXAMPLES
  REVISION LOG
 --------------------------------------------------------------------------*/
-htri_t
+static htri_t
 H5S_hyper_is_valid (const H5S_t *space)
 {
     unsigned u;                    /* Counter */
@@ -2068,7 +2068,7 @@ done:
  EXAMPLES
  REVISION LOG
 --------------------------------------------------------------------------*/
-herr_t
+static herr_t
 H5S_hyper_serialize (const H5S_t *space, uint8_t *buf)
 {
     const H5S_hyper_dim_t *diminfo;         /* Alias for dataspace's diminfo information */
@@ -2229,7 +2229,7 @@ H5S_hyper_serialize (const H5S_t *space, uint8_t *buf)
  EXAMPLES
  REVISION LOG
 --------------------------------------------------------------------------*/
-herr_t
+static herr_t
 H5S_hyper_deserialize (H5S_t *space, const uint8_t *buf)
 {
     uint32_t rank;           	/* rank of points */
@@ -2705,7 +2705,7 @@ done:
  EXAMPLES
  REVISION LOG
 --------------------------------------------------------------------------*/
-herr_t
+static herr_t
 H5S_hyper_bounds(const H5S_t *space, hsize_t *start, hsize_t *end)
 {
     unsigned rank;              /* Dataspace rank */
@@ -2772,7 +2772,7 @@ done:
  EXAMPLES
  REVISION LOG
 --------------------------------------------------------------------------*/
-herr_t
+static herr_t
 H5S_hyper_offset(const H5S_t *space, hsize_t *offset)
 {
     const hssize_t *sel_offset; /* Pointer to the selection's offset */
@@ -2784,7 +2784,7 @@ H5S_hyper_offset(const H5S_t *space, hsize_t *offset)
 
     FUNC_ENTER_NOAPI(FAIL)
 
-    HDassert(space);
+    HDassert(space && space->extent.rank>0);
     HDassert(offset);
 
     /* Start at linear offset 0 */
@@ -2878,7 +2878,7 @@ done:
  EXAMPLES
  REVISION LOG
 --------------------------------------------------------------------------*/
-htri_t
+static htri_t
 H5S_hyper_is_contiguous(const H5S_t *space)
 {
     unsigned small_contiguous,      /* Flag for small contiguous block */
@@ -3063,7 +3063,7 @@ H5S_hyper_is_contiguous(const H5S_t *space)
  EXAMPLES
  REVISION LOG
 --------------------------------------------------------------------------*/
-htri_t
+static htri_t
 H5S_hyper_is_single(const H5S_t *space)
 {
     H5S_hyper_span_info_t *spans;   /* Hyperslab span info node */
@@ -3133,7 +3133,7 @@ done:
  EXAMPLES
  REVISION LOG
 --------------------------------------------------------------------------*/
-htri_t
+static htri_t
 H5S_hyper_is_regular(const H5S_t *space)
 {
     htri_t ret_value;  /* return value */
@@ -3175,7 +3175,7 @@ H5S_hyper_is_regular(const H5S_t *space)
  *	changing the hyperslab selection of one data space causes a core dump
  *	when closing some other data space.
 --------------------------------------------------------------------------*/
-herr_t
+static herr_t
 H5S_hyper_release(H5S_t *space)
 {
     herr_t ret_value = SUCCEED;
@@ -4008,7 +4008,7 @@ H5S_hyper_adjust_helper_u (H5S_hyper_span_info_t *spans, const hsize_t *offset)
  EXAMPLES
  REVISION LOG
 --------------------------------------------------------------------------*/
-herr_t
+static herr_t
 H5S_hyper_adjust_u(H5S_t *space, const hsize_t *offset)
 {
     unsigned u;                         /* Local index variable */
@@ -4102,7 +4102,7 @@ H5S_hyper_project_scalar(const H5S_t *space, hsize_t *offset)
     } /* end else */
 
     /* Calculate offset of selection in projected buffer */
-    *offset = H5V_array_offset(space->extent.rank, space->extent.size, block); 
+    *offset = H5VM_array_offset(space->extent.rank, space->extent.size, block); 
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
@@ -4294,7 +4294,7 @@ H5S_hyper_project_simple(const H5S_t *base_space, H5S_t *new_space, hsize_t *off
             HDmemset(block, 0, sizeof(block));
             for(u = 0; u < (base_space->extent.rank - new_space->extent.rank); u++)
                 block[u] = opt_diminfo[u].start;
-            *offset = H5V_array_offset(base_space->extent.rank, base_space->extent.size, block); 
+            *offset = H5VM_array_offset(base_space->extent.rank, base_space->extent.size, block); 
 
             /* Set the correct dimensions for the base & new spaces */
             base_space_dim = base_space->extent.rank - new_space->extent.rank;
@@ -4377,7 +4377,7 @@ H5S_hyper_project_simple(const H5S_t *base_space, H5S_t *new_space, hsize_t *off
             } /* end while */
 
             /* Compute the offset for the down-projection */
-            *offset = H5V_array_offset(base_space->extent.rank, base_space->extent.size, block); 
+            *offset = H5VM_array_offset(base_space->extent.rank, base_space->extent.size, block); 
 
             /* Project the base space's selection down in less dimensions */
             if(H5S_hyper_project_simple_lower(base_space, new_space) < 0)
@@ -8249,6 +8249,9 @@ loc += fast_dim_buf_off;
 
             duffs_index = (fast_dim_count + 7) / 8;
             switch (fast_dim_count % 8) {
+                default:
+                    HDassert(0 && "This Should never be executed!");
+                    break;
                 case 0:
                     do
                       {

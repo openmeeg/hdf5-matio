@@ -118,9 +118,9 @@ H5O_efl_decode(H5F_t *f, hid_t dxpl_id, H5O_t UNUSED *open_oh,
 
     /* Number of slots */
     UINT16DECODE(p, mesg->nalloc);
-    assert(mesg->nalloc>0);
+    HDassert(mesg->nalloc>0);
     UINT16DECODE(p, mesg->nused);
-    assert(mesg->nused <= mesg->nalloc);
+    HDassert(mesg->nused <= mesg->nalloc);
 
     /* Heap address */
     H5F_addr_decode(f, &p, &(mesg->heap_addr));
@@ -230,7 +230,7 @@ H5O_efl_encode(H5F_t *f, hbool_t UNUSED disable_shared, uint8_t *p, const void *
 	 */
 	HDassert(mesg->slot[u].name_offset);
 	H5F_ENCODE_LENGTH(f, p, mesg->slot[u].name_offset);
-	H5F_ENCODE_LENGTH(f, p, mesg->slot[u].offset);
+	H5F_ENCODE_LENGTH(f, p, (hsize_t)mesg->slot[u].offset);
 	H5F_ENCODE_LENGTH(f, p, mesg->slot[u].size);
     } /* end for */
 
@@ -351,13 +351,13 @@ H5O_efl_size(const H5F_t *f, hbool_t UNUSED disable_shared, const void *_mesg)
     HDassert(f);
     HDassert(mesg);
 
-    ret_value = H5F_SIZEOF_ADDR(f) +			/*heap address	*/
+    ret_value = (size_t)H5F_SIZEOF_ADDR(f) +			/*heap address	*/
 		2 +					/*slots allocated*/
 		2 +					/*num slots used*/
 		4 +					/*reserved	*/
-		mesg->nused * (H5F_SIZEOF_SIZE(f) +	/*name offset	*/
-			       H5F_SIZEOF_SIZE(f) +	/*file offset	*/
-			       H5F_SIZEOF_SIZE(f));	/*file size	*/
+		mesg->nused * ((size_t)H5F_SIZEOF_SIZE(f) +	/*name offset	*/
+			       (size_t)H5F_SIZEOF_SIZE(f) +	/*file offset	*/
+			       (size_t)H5F_SIZEOF_SIZE(f));	/*file size	*/
 
     FUNC_LEAVE_NOAPI(ret_value)
 } /* end H5O_efl_size() */
@@ -545,7 +545,6 @@ H5O_efl_debug(H5F_t UNUSED *f, hid_t UNUSED dxpl_id, const void *_mesg, FILE * s
 	      int indent, int fwidth)
 {
     const H5O_efl_t	   *mesg = (const H5O_efl_t *) _mesg;
-    char		    buf[64];
     size_t		    u;
 
     FUNC_ENTER_NOAPI_NOINIT_NOERR
@@ -565,8 +564,10 @@ H5O_efl_debug(H5F_t UNUSED *f, hid_t UNUSED dxpl_id, const void *_mesg, FILE * s
 	      mesg->nused, mesg->nalloc);
 
     for(u = 0; u < mesg->nused; u++) {
-	sprintf (buf, "File %u", (unsigned)u);
-	HDfprintf (stream, "%*s%s:\n", indent, "", buf);
+        char		    buf[64];
+
+	HDsnprintf(buf, sizeof(buf), "File %u", (unsigned)u);
+	HDfprintf(stream, "%*s%s:\n", indent, "", buf);
 
 	HDfprintf(stream, "%*s%-*s \"%s\"\n", indent+3, "", MAX (fwidth-3, 0),
 		  "Name:",
@@ -576,11 +577,11 @@ H5O_efl_debug(H5F_t UNUSED *f, hid_t UNUSED dxpl_id, const void *_mesg, FILE * s
 		  "Name offset:",
 		  (unsigned long)(mesg->slot[u].name_offset));
 
-	HDfprintf (stream, "%*s%-*s %lu\n", indent+3, "", MAX (fwidth-3, 0),
+	HDfprintf(stream, "%*s%-*s %lu\n", indent+3, "", MAX (fwidth-3, 0),
 		   "Offset of data in file:",
 		   (unsigned long)(mesg->slot[u].offset));
 
-	HDfprintf (stream, "%*s%-*s %lu\n", indent+3, "", MAX (fwidth-3, 0),
+	HDfprintf(stream, "%*s%-*s %lu\n", indent+3, "", MAX (fwidth-3, 0),
 		   "Bytes reserved for data:",
 		   (unsigned long)(mesg->slot[u].size));
     } /* end for */

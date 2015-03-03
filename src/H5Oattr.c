@@ -300,7 +300,7 @@ H5O_attr_encode(H5F_t *f, uint8_t *p, const void *mesg)
     if(attr->shared->version >= H5O_ATTR_VERSION_2) {
         flags = (is_type_shared ? H5O_ATTR_FLAG_TYPE_SHARED : 0 );
         flags |= (is_space_shared ? H5O_ATTR_FLAG_SPACE_SHARED : 0);
-        *p++ = flags;    /* Set flags for attribute */
+        *p++ = (uint8_t)flags;    /* Set flags for attribute */
     } /* end if */
     else
         *p++ = 0; /* Reserved, for version <2 */
@@ -723,7 +723,7 @@ done:
  *
  *-------------------------------------------------------------------------
  */
-herr_t
+static herr_t
 H5O_attr_get_crt_index(const void *_mesg, H5O_msg_crt_idx_t *crt_idx /*out*/)
 {
     const H5A_t  *attr = (const H5A_t *)_mesg;
@@ -753,7 +753,7 @@ H5O_attr_get_crt_index(const void *_mesg, H5O_msg_crt_idx_t *crt_idx /*out*/)
  *
  *-------------------------------------------------------------------------
  */
-herr_t
+static herr_t
 H5O_attr_set_crt_index(void *_mesg, H5O_msg_crt_idx_t crt_idx)
 {
     H5A_t  *attr = (H5A_t *)_mesg;
@@ -793,7 +793,7 @@ H5O_attr_debug(H5F_t *f, hid_t dxpl_id, const void *_mesg, FILE * stream, int in
 {
     const H5A_t *mesg = (const H5A_t *)_mesg;
     const char		*s;             /* Temporary string pointer */
-    char		buf[256];       /* Temporary string buffer */
+    char		buf[128];       /* Temporary string buffer */
     herr_t ret_value = SUCCEED;         /* Return value */
 
     FUNC_ENTER_NOAPI_NOINIT
@@ -804,7 +804,7 @@ H5O_attr_debug(H5F_t *f, hid_t dxpl_id, const void *_mesg, FILE * stream, int in
     HDassert(indent >= 0);
     HDassert(fwidth >= 0);
 
-    fprintf(stream, "%*s%-*s \"%s\"\n", indent, "", fwidth,
+    HDfprintf(stream, "%*s%-*s \"%s\"\n", indent, "", fwidth,
 	    "Name:",
 	    mesg->shared->name);
     switch(mesg->shared->encoding) {
@@ -830,17 +830,17 @@ H5O_attr_debug(H5F_t *f, hid_t dxpl_id, const void *_mesg, FILE * stream, int in
         case H5T_CSET_RESERVED_13:
         case H5T_CSET_RESERVED_14:
         case H5T_CSET_RESERVED_15:
-            sprintf(buf, "H5T_CSET_RESERVED_%d", (int)(mesg->shared->encoding));
+            HDsnprintf(buf, sizeof(buf), "H5T_CSET_RESERVED_%d", (int)(mesg->shared->encoding));
             s = buf;
             break;
 
         case H5T_CSET_ERROR:
         default:
-            sprintf(buf, "Unknown character set: %d", (int)(mesg->shared->encoding));
+            HDsnprintf(buf, sizeof(buf), "Unknown character set: %d", (int)(mesg->shared->encoding));
             s = buf;
             break;
     } /* end switch */
-    fprintf(stream, "%*s%-*s %s\n", indent, "", fwidth,
+    HDfprintf(stream, "%*s%-*s %s\n", indent, "", fwidth,
             "Character Set of Name:",
             s);
     HDfprintf(stream, "%*s%-*s %t\n", indent, "", fwidth,
@@ -856,18 +856,18 @@ H5O_attr_debug(H5F_t *f, hid_t dxpl_id, const void *_mesg, FILE * stream, int in
                 "Creation Index:",
                 (unsigned)mesg->shared->crt_idx);
 
-    fprintf(stream, "%*sDatatype...\n", indent, "");
-    fprintf(stream, "%*s%-*s %lu\n", indent+3, "", MAX(0,fwidth-3),
+    HDfprintf(stream, "%*sDatatype...\n", indent, "");
+    HDfprintf(stream, "%*s%-*s %lu\n", indent + 3, "", MAX(0,fwidth - 3),
 	    "Encoded Size:",
 	    (unsigned long)(mesg->shared->dt_size));
     if((H5O_MSG_DTYPE->debug)(f, dxpl_id, mesg->shared->dt, stream, indent + 3, MAX(0, fwidth - 3)) < 0)
         HGOTO_ERROR(H5E_OHDR, H5E_WRITEERROR, FAIL, "unable to display datatype message info")
 
-    fprintf(stream, "%*sDataspace...\n", indent, "");
-    fprintf(stream, "%*s%-*s %lu\n", indent+3, "", MAX(0, fwidth - 3),
+    HDfprintf(stream, "%*sDataspace...\n", indent, "");
+    HDfprintf(stream, "%*s%-*s %lu\n", indent + 3, "", MAX(0, fwidth - 3),
 	    "Encoded Size:",
 	    (unsigned long)(mesg->shared->ds_size));
-    if(H5S_debug(f, dxpl_id, mesg->shared->ds, stream, indent+3, MAX(0, fwidth - 3)) < 0)
+    if(H5S_debug(f, dxpl_id, mesg->shared->ds, stream, indent + 3, MAX(0, fwidth - 3)) < 0)
         HGOTO_ERROR(H5E_OHDR, H5E_WRITEERROR, FAIL, "unable to display dataspace message info")
 
 done:

@@ -310,7 +310,7 @@ main (int argc, const char *argv[])
         leave (EXIT_FAILURE);
     }
 
-    fsize = sbuf.st_size;
+    fsize = (off_t)sbuf.st_size;
 
     h5fid = HDopen(input_file, O_RDONLY, 0);
     if(h5fid < 0) {
@@ -327,7 +327,7 @@ main (int argc, const char *argv[])
         leave (EXIT_FAILURE);
     }
 
-    h5fsize = sbuf2.st_size;
+    h5fsize = (hsize_t)sbuf2.st_size;
 
     if (output_file == NULL) {
         ofid = HDopen (input_file, O_WRONLY, 0);
@@ -385,16 +385,19 @@ main (int argc, const char *argv[])
     /* pad the ub */
     where = write_pad (ofid, where);
 
-    if (ub_file)
+    if(ub_file)
         HDfree (ub_file);
-    if (input_file)
+    if(input_file)
         HDfree (input_file);
-    if (output_file)
+    if(output_file)
         HDfree (output_file);
     
-    if (ufid >= 0) HDclose (ufid);
-    if (h5fid >= 0) HDclose (h5fid);
-    if (ofid >= 0) HDclose (ofid);
+    if(ufid >= 0)
+        HDclose (ufid);
+    if(h5fid >= 0)
+        HDclose (h5fid);
+    if(ofid >= 0)
+        HDclose (ofid);
 
     return h5tools_getstatus();
 }
@@ -455,7 +458,7 @@ copy_some_to_file (int infid, int outfid, hsize_t startin, hsize_t startout,
     exit (EXIT_FAILURE);
   }
 
-      howmuch = sbuf.st_size;
+      howmuch = (ssize_t)sbuf.st_size;
     }
   else
       howmuch = limit;

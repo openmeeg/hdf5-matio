@@ -30,7 +30,7 @@
 ! NOTES
 !                         *** IMPORTANT ***
 !  If you add a new function you must add the function name to the
-!  Windows dll file 'hdf5_fortrandll.def' in the fortran/src directory.
+!  Windows dll file 'hdf5_fortrandll.def.in' in the fortran/src directory.
 !  This is needed for Windows based operating systems.
 !
 !*****
@@ -87,6 +87,7 @@ CONTAINS
     END INTERFACE
     INTERFACE
        INTEGER FUNCTION h5init_flags_c(i_H5D_flags, &
+            i_H5D_size_flags,&
             i_H5E_flags, &
             i_H5E_hid_flags, &
             i_H5F_flags, &
@@ -100,11 +101,13 @@ CONTAINS
             i_H5P_flags_int, &
             i_H5R_flags, &
             i_H5S_flags, &
+            i_H5S_hsize_flags, &
             i_H5T_flags, &
             i_H5Z_flags, &
             i_H5generic_flags)
          USE H5GLOBAL
          INTEGER i_H5D_flags(H5D_FLAGS_LEN)
+         INTEGER(SIZE_T) i_H5D_size_flags(H5D_SIZE_FLAGS_LEN)
          INTEGER i_H5E_flags(H5E_FLAGS_LEN)
          INTEGER(HID_T) i_H5E_hid_flags(H5E_HID_FLAGS_LEN)
          INTEGER i_H5F_flags(H5F_FLAGS_LEN)
@@ -118,6 +121,7 @@ CONTAINS
          INTEGER i_H5P_flags_int(H5P_FLAGS_INT_LEN)
          INTEGER i_H5R_flags(H5R_FLAGS_LEN)
          INTEGER i_H5S_flags(H5S_FLAGS_LEN)
+         INTEGER(HSIZE_T) i_H5S_hsize_flags(H5S_HSIZE_FLAGS_LEN)
          INTEGER i_H5T_flags(H5T_FLAGS_LEN)
          INTEGER i_H5Z_flags(H5Z_FLAGS_LEN)
          INTEGER i_H5generic_flags(H5generic_FLAGS_LEN)
@@ -137,6 +141,7 @@ CONTAINS
     END INTERFACE
     error_1 = h5init_types_c(predef_types, floating_types, integer_types)
     error_2 = h5init_flags_c(H5D_flags, &
+         H5D_size_flags, &
          H5E_flags, &
          H5E_hid_flags, &
          H5F_flags, &
@@ -150,6 +155,7 @@ CONTAINS
          H5P_flags_int, &
          H5R_flags, &
          H5S_flags, &
+         H5S_hsize_flags, &
          H5T_flags, &
          H5Z_flags, &
          H5generic_flags)

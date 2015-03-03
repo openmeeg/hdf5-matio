@@ -52,6 +52,7 @@
  * normally require alignment. When set, all native datatypes must be aligned
  * on a byte boundary equal to the data size.
  */
+#if 0
 #define TEST_ALIGNMENT
 
 /* Alignment test stuff */
@@ -61,6 +62,7 @@
 #endif
 #define SET_ALIGNMENT(TYPE,VAL) \
     H5T_NATIVE_##TYPE##_ALIGN_g=MAX(H5T_NATIVE_##TYPE##_ALIGN_g, VAL)
+#endif
 
 const char *FILENAME[] = {
     "dtypes1.h5",
@@ -143,9 +145,6 @@ static void test_classes()
  */
 static void test_copy()
 {
-    hid_t               a_copy;
-    herr_t		status;
-
     SUBTEST("DataType::copy() and DataType::operator=");
     try {
 	// Test copying from a predefined datatype using DataType::operator=
@@ -211,8 +210,7 @@ static void test_query()
 	float  b;
 	long   c;
 	double d;
-    } s_type_t;
-    char	filename[1024];
+    } src_typ_t;
     short	enum_val;
 
     // Output message about test being performed
@@ -223,12 +221,12 @@ static void test_query()
 	H5File file(FILENAME[2], H5F_ACC_TRUNC);
 
 	// Create a compound datatype
-	CompType tid1(sizeof(s_type_t));
+	CompType tid1(sizeof(src_typ_t));
 
-	tid1.insertMember("a", HOFFSET(s_type_t, a), PredType::NATIVE_INT);
-	tid1.insertMember("b", HOFFSET(s_type_t, b), PredType::NATIVE_FLOAT);
-	tid1.insertMember("c", HOFFSET(s_type_t, c), PredType::NATIVE_LONG);
-	tid1.insertMember("d", HOFFSET(s_type_t, d), PredType::NATIVE_DOUBLE);
+	tid1.insertMember("a", HOFFSET(src_typ_t, a), PredType::NATIVE_INT);
+	tid1.insertMember("b", HOFFSET(src_typ_t, b), PredType::NATIVE_FLOAT);
+	tid1.insertMember("c", HOFFSET(src_typ_t, c), PredType::NATIVE_LONG);
+	tid1.insertMember("d", HOFFSET(src_typ_t, d), PredType::NATIVE_DOUBLE);
 
 	// Create a enumerate datatype
 	EnumType tid2(sizeof(short));
@@ -387,7 +385,6 @@ static void test_transient ()
 const H5std_string filename2("dtypes2.h5");
 static void test_named ()
 {
-    herr_t		status;
     static hsize_t	ds_size[2] = {10, 20};
     hsize_t		i;
     unsigned 		attr_data[10][20];
@@ -413,6 +410,23 @@ static void test_named ()
 	// Copy a predefined datatype and commit the copy.
         IntType itype(PredType::NATIVE_INT);
         itype.commit(file, "native-int");
+
+	// Test commit passing in const H5File& for prototype with const
+	try
+	{
+	    // Create random char type
+	    IntType atype(PredType::NATIVE_UCHAR);
+
+	    // Creating group, declared as const
+	    const Group const_grp = file.createGroup("GR as loc");
+
+	    // Commit type passing in const group; compilation would fail if
+	    // no matching prototype
+	    atype.commit(const_grp, "random uchar");
+	}   // end of try block
+	catch (Exception E) {
+	    issue_fail_msg("test_named", __LINE__, __FILE__, "Commit at const group");
+	}
 
 	// Check that it is committed.
 	if (itype.committed() == false)

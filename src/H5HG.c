@@ -136,7 +136,7 @@ H5HG_create(H5F_t *f, hid_t dxpl_id, size_t size)
 {
     H5HG_heap_t	*heap = NULL;
     uint8_t	*p = NULL;
-    haddr_t	addr;
+    haddr_t	addr = HADDR_UNDEF;
     size_t	n;
     haddr_t	ret_value = HADDR_UNDEF;        /* Return value */
 
@@ -191,7 +191,7 @@ HDmemset(heap->chunk, 0, size);
 
     /* The freespace object */
     heap->obj[0].size = size - H5HG_SIZEOF_HDR(f);
-    assert(H5HG_ISALIGNED(heap->obj[0].size));
+    HDassert(H5HG_ISALIGNED(heap->obj[0].size));
     heap->obj[0].nrefs = 0;
     heap->obj[0].begin = p;
     UINT16ENCODE(p, 0);	/*object ID*/
@@ -208,7 +208,7 @@ HDmemset(heap->chunk, 0, size);
 	HGOTO_ERROR(H5E_HEAP, H5E_CANTINIT, HADDR_UNDEF, "unable to add global heap collection to file's CWFS")
 
     /* Add the heap to the cache */
-    if(H5AC_insert_entry(f, dxpl_id, H5AC_GHEAP, addr, heap, H5AC__NO_FLAGS_SET)<0)
+    if(H5AC_insert_entry(f, dxpl_id, H5AC_GHEAP, addr, heap, H5AC__NO_FLAGS_SET) < 0)
 	HGOTO_ERROR(H5E_HEAP, H5E_CANTINIT, HADDR_UNDEF, "unable to cache global heap collection")
 
     ret_value = addr;
@@ -372,7 +372,7 @@ H5HG_alloc(H5F_t *f, H5HG_heap_t *heap, size_t size, unsigned *heap_flags_ptr)
 	UINT16ENCODE(p, 0);	/*nrefs*/
 	UINT32ENCODE(p, 0);	/*reserved*/
 	H5F_ENCODE_LENGTH (f, p, heap->obj[0].size);
-	assert(H5HG_ISALIGNED(heap->obj[0].size));
+	HDassert(H5HG_ISALIGNED(heap->obj[0].size));
     } /* end else-if */
     else {
 	/*
@@ -381,7 +381,7 @@ H5HG_alloc(H5F_t *f, H5HG_heap_t *heap, size_t size, unsigned *heap_flags_ptr)
 	 */
 	heap->obj[0].size -= need;
 	heap->obj[0].begin += need;
-	assert(H5HG_ISALIGNED(heap->obj[0].size));
+	HDassert(H5HG_ISALIGNED(heap->obj[0].size));
     }
 
     /* Mark the heap as dirty */
@@ -475,7 +475,7 @@ HDmemset(new_chunk + heap->size, 0, need);
     UINT16ENCODE(p, 0);	/*nrefs*/
     UINT32ENCODE(p, 0);	/*reserved*/
     H5F_ENCODE_LENGTH(f, p, heap->obj[0].size);
-    assert(H5HG_ISALIGNED(heap->obj[0].size));
+    HDassert(H5HG_ISALIGNED(heap->obj[0].size));
 
     /* Resize the heap in the cache */
     if(H5AC_resize_entry(heap, heap->size) < 0)

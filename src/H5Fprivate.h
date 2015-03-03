@@ -29,17 +29,9 @@
 /* Private headers needed by this file */
 
 
-/****************************/
-/* Library Private Typedefs */
-/****************************/
-
-/* Main file structure */
-typedef struct H5F_t H5F_t;
-typedef struct H5F_file_t H5F_file_t;
-
-/* Block aggregation structure */
-typedef struct H5F_blk_aggr_t H5F_blk_aggr_t;
-
+/**************************/
+/* Library Private Macros */
+/**************************/
 
 /*
  * Encode and decode macros for file meta-data.
@@ -70,10 +62,10 @@ typedef struct H5F_blk_aggr_t H5F_blk_aggr_t;
    *(p) = (uint8_t)(((i) >> 24) & 0xff); (p)++;				      \
 }
 
-/* Encode a 32-bit unsigned integer into a variable-sized buffer */
+/* Encode an unsigned integer into a variable-sized buffer */
 /* (Assumes that the high bits of the integer are zero) */
-#  define UINT32ENCODE_VAR(p, n, l) {					      \
-   uint32_t _n = (n);							      \
+#  define ENCODE_VAR(p, typ, n, l) {					      \
+   typ _n = (n);							      \
    size_t _i;								      \
    uint8_t *_p = (uint8_t*)(p);						      \
 									      \
@@ -81,6 +73,10 @@ typedef struct H5F_blk_aggr_t H5F_blk_aggr_t;
       *_p++ = (uint8_t)(_n & 0xff);					      \
    (p) = (uint8_t*)(p) + l;						      \
 }
+
+/* Encode a 32-bit unsigned integer into a variable-sized buffer */
+/* (Assumes that the high bits of the integer are zero) */
+#  define UINT32ENCODE_VAR(p, n, l)     ENCODE_VAR(p, uint32_t, n, l)
 
 #  define INT64ENCODE(p, n) {						      \
    int64_t _n = (n);							      \
@@ -108,15 +104,7 @@ typedef struct H5F_blk_aggr_t H5F_blk_aggr_t;
 
 /* Encode a 64-bit unsigned integer into a variable-sized buffer */
 /* (Assumes that the high bits of the integer are zero) */
-#  define UINT64ENCODE_VAR(p, n, l) {					      \
-   uint64_t _n = (n);							      \
-   size_t _i;								      \
-   uint8_t *_p = (uint8_t*)(p);						      \
-									      \
-   for(_i = 0; _i < l; _i++, _n >>= 8)					      \
-      *_p++ = (uint8_t)(_n & 0xff);					      \
-   (p) = (uint8_t*)(p) + l;						      \
-}
+#  define UINT64ENCODE_VAR(p, n, l)     ENCODE_VAR(p, uint64_t, n, l)
 
 /* DECODE converts little endian bytes pointed by p to integer values and store
  * it in i.  For signed values, need to do sign-extension when converting
@@ -152,12 +140,9 @@ typedef struct H5F_blk_aggr_t H5F_blk_aggr_t;
    (i) |= ((uint32_t)(*(p) & 0xff) << 24); (p)++;			      \
 }
 
-/* Decode a variable-sized buffer into a 32-bit unsigned integer */
+/* Decode a variable-sized buffer */
 /* (Assumes that the high bits of the integer will be zero) */
-/* (Note: this is exactly the same code as the 64-bit variable-length decoder
- *      and bugs/improvements should be make in both places - QAK)
- */
-#  define UINT32DECODE_VAR(p, n, l) {					      \
+#  define DECODE_VAR(p, n, l) {						      \
    size_t _i;								      \
 									      \
    n = 0;								      \
@@ -166,6 +151,10 @@ typedef struct H5F_blk_aggr_t H5F_blk_aggr_t;
       n = (n << 8) | *(--p);						      \
    (p) += l;								      \
 }
+
+/* Decode a variable-sized buffer into a 32-bit unsigned integer */
+/* (Assumes that the high bits of the integer will be zero) */
+#  define UINT32DECODE_VAR(p, n, l)     DECODE_VAR(p, n, l)
 
 #  define INT64DECODE(p, n) {						      \
    /* WE DON'T CHECK FOR OVERFLOW! */					      \
@@ -191,18 +180,7 @@ typedef struct H5F_blk_aggr_t H5F_blk_aggr_t;
 
 /* Decode a variable-sized buffer into a 64-bit unsigned integer */
 /* (Assumes that the high bits of the integer will be zero) */
-/* (Note: this is exactly the same code as the 32-bit variable-length decoder
- *      and bugs/improvements should be make in both places - QAK)
- */
-#  define UINT64DECODE_VAR(p, n, l) {					      \
-   size_t _i;								      \
-									      \
-   n = 0;								      \
-   (p) += l;								      \
-   for (_i = 0; _i < l; _i++)						      \
-      n = (n << 8) | *(--p);						      \
-   (p) += l;								      \
-}
+#  define UINT64DECODE_VAR(p, n, l)     DECODE_VAR(p, n, l)
 
 /* Address-related macros */
 #define H5F_addr_overflow(X,Z)	(HADDR_UNDEF==(X) ||			      \
@@ -236,7 +214,7 @@ typedef struct H5F_blk_aggr_t H5F_blk_aggr_t;
 
 /* If the module using this macro is allowed access to the private variables, access them directly */
 #ifdef H5F_PACKAGE
-#define H5F_INTENT(F)           ((F)->intent)
+#define H5F_INTENT(F)           ((F)->shared->flags)
 #define H5F_OPEN_NAME(F)        ((F)->open_name)
 #define H5F_ACTUAL_NAME(F)      ((F)->actual_name)
 #define H5F_EXTPATH(F)          ((F)->extpath)
@@ -416,6 +394,8 @@ typedef struct H5F_blk_aggr_t H5F_blk_aggr_t;
 #define H5F_ACS_WANT_POSIX_FD_NAME              "want_posix_fd" /* Internal: query the file descriptor from the core VFD, instead of the memory address */
 #define H5F_ACS_EFC_SIZE_NAME                   "efc_size"      /* Size of external file cache */
 #define H5F_ACS_FILE_IMAGE_INFO_NAME            "file_image_info" /* struct containing initial file image and callback info */
+#define H5F_ACS_CORE_WRITE_TRACKING_FLAG_NAME       "core_write_tracking_flag" /* Whether or not core VFD backing store write tracking is enabled */
+#define H5F_ACS_CORE_WRITE_TRACKING_PAGE_SIZE_NAME  "core_write_tracking_page_size" /* The page size in kiB when core VFD write tracking is enabled */
 
 /* ======================== File Mount properties ====================*/
 #define H5F_MNT_SYM_LOCAL_NAME 		"local"                 /* Whether absolute symlinks local to file. */
@@ -425,6 +405,10 @@ typedef struct H5F_blk_aggr_t H5F_blk_aggr_t;
 /* Which process writes metadata */
 #define H5_PAR_META_WRITE 0
 #endif /* H5_HAVE_PARALLEL */
+
+/* Define the HDF5 file signature */
+#define H5F_SIGNATURE	  "\211HDF\r\n\032\n"
+#define H5F_SIGNATURE_LEN 8
 
 /* Version #'s of the major components of the file format */
 #define HDF5_SUPERBLOCK_VERSION_DEF	0	/* The default super block format	  */
@@ -491,11 +475,42 @@ typedef struct H5F_blk_aggr_t H5F_blk_aggr_t;
 #define H5SM_LIST_MAGIC                 "SMLI"          /* Shared Message List */
 
 
-/* Forward declarations for prototype arguments */
+/****************************/
+/* Library Private Typedefs */
+/****************************/
+
+/* Forward declarations (for prototypes & type definitions) */
 struct H5B_class_t;
 struct H5RC_t;
 struct H5O_loc_t;
 struct H5HG_heap_t;
+struct H5P_genplist_t;
+
+/* Forward declarations for anonymous H5F objects */
+
+/* Main file structures */
+typedef struct H5F_t H5F_t;
+typedef struct H5F_file_t H5F_file_t;
+
+/* Block aggregation structure */
+typedef struct H5F_blk_aggr_t H5F_blk_aggr_t;
+
+/* I/O Info for an operation */
+typedef struct H5F_io_info_t {
+    const H5F_t *f;                     /* File object */
+    const struct H5P_genplist_t *dxpl;         /* DXPL object */
+} H5F_io_info_t;
+
+
+/*****************************/
+/* Library-private Variables */
+/*****************************/
+
+
+/***************************************/
+/* Library-private Function Prototypes */
+/***************************************/
+
 
 /* Private functions */
 H5_DLL H5F_t *H5F_open(const char *name, unsigned flags, hid_t fcpl_id,
@@ -513,6 +528,7 @@ H5_DLL unsigned H5F_get_nopen_objs(const H5F_t *f);
 H5_DLL unsigned H5F_incr_nopen_objs(H5F_t *f);
 H5_DLL unsigned H5F_decr_nopen_objs(H5F_t *f);
 H5_DLL hid_t H5F_get_file_id(const H5F_t *f);
+H5_DLL ssize_t H5F_get_file_image(H5F_t *f, void *buf_ptr, size_t buf_len);
 H5_DLL H5F_t *H5F_get_parent(const H5F_t *f);
 H5_DLL unsigned H5F_get_nmounts(const H5F_t *f);
 H5_DLL hid_t H5F_get_access_plist(H5F_t *f, hbool_t app_ref);
@@ -560,6 +576,7 @@ H5_DLL herr_t H5F_get_vfd_handle(const H5F_t *file, hid_t fapl,
 H5_DLL hbool_t H5F_is_mount(const H5F_t *file);
 H5_DLL hbool_t H5F_has_mount(const H5F_t *file);
 H5_DLL herr_t H5F_traverse_mount(struct H5O_loc_t *oloc/*in,out*/);
+H5_DLL herr_t H5F_flush_mounts(H5F_t *f, hid_t dxpl_id);
 
 /* Functions that operate on blocks of bytes wrt super block */
 H5_DLL herr_t H5F_block_read(const H5F_t *f, H5FD_mem_t type, haddr_t addr,
@@ -577,7 +594,7 @@ H5_DLL void H5F_addr_decode_len(size_t addr_len, const uint8_t **pp, haddr_t *ad
 H5_DLL herr_t H5P_facc_close(hid_t dxpl_id, void *close_data);
 
 /* Shared file list related routines */
-H5_DLL herr_t H5F_sfile_assert_num(unsigned n);
+H5_DLL void H5F_sfile_assert_num(unsigned n);
 
 /* Routines for creating & destroying "fake" file structures */
 H5_DLL H5F_t *H5F_fake_alloc(uint8_t sizeof_size);

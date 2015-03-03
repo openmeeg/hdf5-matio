@@ -264,7 +264,10 @@ H5E_walk1_cb(int n, H5E_error1_t *err_desc, void *client_data)
         if(cls_ptr->lib_vers)
             eprint->cls.lib_vers = cls_ptr->lib_vers;
 
-        fprintf(stream, "%s-DIAG: Error detected in %s (%s) ", cls_ptr->cls_name, cls_ptr->lib_name, cls_ptr->lib_vers);
+        fprintf(stream, "%s-DIAG: Error detected in %s (%s) ",
+            (cls_ptr->cls_name ? cls_ptr->cls_name : "(null)"),
+            (cls_ptr->lib_name ? cls_ptr->lib_name : "(null)"),
+            (cls_ptr->lib_vers ? cls_ptr->lib_vers : "(null)"));
 
         /* try show the process or thread id in multiple processes cases*/
 #ifdef H5_HAVE_PARALLEL
@@ -377,6 +380,10 @@ H5E_walk2_cb(unsigned n, const H5E_error2_t *err_desc, void *client_data)
      * they might be different. */
     cls_ptr = (H5E_cls_t *)H5I_object_verify(err_desc->cls_id, H5I_ERROR_CLASS);
 
+    /* Check for bad pointer(s), but can't issue error, just leave */
+    if(!cls_ptr)
+        HGOTO_DONE(FAIL)
+
     /* Print error class header if new class */
     if(eprint->cls.lib_name == NULL || HDstrcmp(cls_ptr->lib_name, eprint->cls.lib_name)) {
         /* update to the new class information */
@@ -387,7 +394,10 @@ H5E_walk2_cb(unsigned n, const H5E_error2_t *err_desc, void *client_data)
         if(cls_ptr->lib_vers)
             eprint->cls.lib_vers = cls_ptr->lib_vers;
 
-        fprintf(stream, "%s-DIAG: Error detected in %s (%s) ", cls_ptr->cls_name, cls_ptr->lib_name, cls_ptr->lib_vers);
+        fprintf(stream, "%s-DIAG: Error detected in %s (%s) ",
+            (cls_ptr->cls_name ? cls_ptr->cls_name : "(null)"),
+            (cls_ptr->lib_name ? cls_ptr->lib_name : "(null)"),
+            (cls_ptr->lib_vers ? cls_ptr->lib_vers : "(null)"));
 
         /* try show the process or thread id in multiple processes cases*/
 #ifdef H5_HAVE_PARALLEL

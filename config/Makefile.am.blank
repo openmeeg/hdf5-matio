@@ -20,7 +20,7 @@
 #
 
 ## Makefile.am template
-## When automake is run, it scans configure.in to find all Makefiles used by
+## When automake is run, it scans configure.ac to find all Makefiles used by
 ## the build that come from Makefile.in files.  If there are Makefile.am's 
 ## in any of those locations, it parses the Makefile.am's to produce
 ## Makefile.in's, which configure uses to create Makefiles.
@@ -40,7 +40,7 @@
 include $(top_srcdir)/config/commence.am
 
 # Add include directories to the C preprocessor flags
-INCLUDES=-I$(top_srcdir)/src
+AM_CPPFLAGS+=-I$(top_srcdir)/src
 
 # Our main targets, the library foo.la and the programs bar and baz
 lib_LTLIBRARIES=foo.la
