@@ -21,6 +21,7 @@
 
 #define H5O_PACKAGE		/*suppress error about including H5Opkg	  */
 
+#include <time.h>
 #include "H5private.h"		/* Generic Functions			*/
 #include "H5Eprivate.h"		/* Error handling		  	*/
 #include "H5FLprivate.h"	/* Free lists                           */
@@ -223,6 +224,8 @@ H5O_mtime_decode(H5F_t UNUSED *f, hid_t UNUSED dxpl_id, H5O_t UNUSED *open_oh,
     the_time += tm.__tm_gmtoff;
 #elif defined(H5_HAVE_TIMEZONE)
     /* Linux libc-5 */
+    int timezone;
+    _get_timezone(&timezone);
     the_time -= timezone - (tm.tm_isdst?3600:0);
 #elif defined(H5_HAVE_BSDGETTIMEOFDAY) && defined(H5_HAVE_STRUCT_TIMEZONE)
     /* Irix5.3 */
